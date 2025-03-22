@@ -73,7 +73,7 @@
                             <td>{% for ip in net.ips %}
                                 {{ ip }}<br>
                             {% endfor %}</td>
-                            <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
+                            <td id="ether_{{ loop.index0 }}" style="background: linear-gradient(to right, #6BCBD5 0%, #6BCBD5 {{ net.utilization }}%, #ffffff {{ net.utilization }}%, #ffffff 100%);">{{ net.speed if net.speed > 0 else "Unknown" }}</td>
                             <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
                             <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
                         </tr>
@@ -113,6 +113,19 @@ function updateDashboard() {
             }
             $('#sub_core_' + k).css({
                 "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${entry}%, #ffffff ${entry}%, #ffffff 100%)`
+            });
+        });
+
+        data.network_info.forEach((net, k) => { 
+            var color = '#6BCBD5';
+            if (net.utilization > 55) {
+                color = '#F79131';
+            }
+            if (net.utilization > 90) {
+                color = '#8B173E';
+            }
+            $('#ether_' + k).css({
+                "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${net.utilization}%, #ffffff ${net.utilization}%, #ffffff 100%)`
             });
         });
 
