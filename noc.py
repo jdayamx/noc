@@ -393,4 +393,6 @@ def start_scheduler():
 if __name__ == '__main__':
     init_db()
     add_default_users()
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        start_scheduler()
     app.run(host='0.0.0.0', port=1983, debug=True)
