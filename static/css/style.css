@@ -1,0 +1,33 @@
+.gradient-custom-2 {
+    /* fallback for old browsers */
+    background: #fccb90;
+    
+    /* Chrome 10-25, Safari 5.1-6 */
+    background: -webkit-linear-gradient(to top, #f9f617, #d8c836, #3679dd, #4573b4);
+    
+    /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+    background: linear-gradient(to top, #f9f617, #d8c836, #3679dd, #4573b4);
+    }
+    
+    @media (min-width: 768px) {
+    .gradient-form {
+    height: 100vh !important;
+    }
+    }
+    @media (min-width: 769px) {
+    .gradient-custom-2 {
+    border-top-right-radius: .3rem;
+    border-bottom-right-radius: .3rem;
+    }
+    }
+
+.btn-primary {
+    --bs-btn-bg: #0A4467;
+    --bs-btn-border-color: #0A4467;
+    --bs-btn-hover-bg: #0E5582;
+    --bs-btn-hover-border-color: #0E5582;
+    --bs-btn-active-bg: #0E5582;
+    --bs-btn-active-border-color: #0E5582;
+    --bs-btn-disabled-bg: #0A4467;
+    --bs-btn-disabled-border-color: #0A4467;
+}

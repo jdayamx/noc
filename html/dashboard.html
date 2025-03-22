@@ -1,0 +1,213 @@
+{% extends 'main.html' %}
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <div class="row">
+            <div class="col-7">
+                <h3>Disk Information</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Mount Point</th>
+                            <th>File System</th>
+                            <th>Total (GB)</th>
+                            <th>Free (GB)</th>
+                            <th>Used (GB)</th>
+                            <th>Usage (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for disk in disk_info %}
+                        <tr>
+                            <td>{{ disk.device }}</td>
+                            <td>{{ disk.mountpoint }}</td>
+                            <td>{{ disk.fstype }}</td>
+                            <td>{{ (disk.size / (1000 ** 3)) | round(2) }} GB</td>
+                            <td>{{ (disk.free / (1000 ** 3)) | round(2) }} GB</td>
+                            <td>{{ (disk.used / (1000 ** 3)) | round(2) }} GB</td>
+                            <td>{{ disk.percent }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-5">
+                <h3><i class="las la-microchip"></i> CPU Information ({{ cpu_info.physical_cores }} core)</h3>
+                <p>Overall CPU Usage: <span id="cpu_usage">{{ cpu_info.cpu_usage }}</span>%</p>
+                <h5>Per-Core Usage:</h5>
+                <ul class="list-group">
+                    {% for usage in cpu_info.per_core_usage %}
+                        <li id="sub_core_{{ loop.index0 }}" class="list-group-item" style="background: linear-gradient(to right, #6BCBD5 0%, #6BCBD5 {{ usage }}%, #ffffff {{ usage }}%, #ffffff 100%);">Core {{ loop.index0 }}: <span id="sub_core_val_{{ loop.index0 }}">{{ usage }}</span>%</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    <!--
+    <h3>CPU Information</h3>
+<p id="cpu-info">Loading...</p>
+
+
+<h3>RAM Information</h3>
+<p id="ram-info">Loading...</p>
+
+<h3>Network Interfaces</h3>
+<p id="network-info">Loading...</p>
+
+<h3>ARP Table</h3>
+<p id="arp-info">Loading...</p>
+-->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+function updateDashboard() {
+    $.get('/get_dashboard_data', function(data) {
+        // CPU Info
+        $('#cpu_usage').html(`${data.cpu_info.cpu_usage}`);
+        data.cpu_info.per_core_usage.forEach((entry, k) => { 
+            $('#sub_core_val_' + k).html(entry);
+            var color = '#6BCBD5';
+            if (entry > 55) {
+                color = '#F79131';
+            }
+            if (entry > 90) {
+                color = '#8B173E';
+            }
+            $('#sub_core_' + k).css({
+                "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${entry}%, #ffffff ${entry}%, #ffffff 100%)`
+            });
+        });
+
+        //     Total Cores: ${data.cpu_info.total_cores}<br>
+        //     CPU Usage: ${data.cpu_info.cpu_usage}%<br>
+        //     Per Core Usage: ${data.cpu_info.per_core_usage.join(', ')}
+        // `);
+
+
+        // // RAM Info
+        // $('#ram-info').html(`
+        //     Total RAM: ${data.ram_info.total / (1024**3)} GB<br>
+        //     Used RAM: ${data.ram_info.used / (1024**3)} GB<br>
+        //     Free RAM: ${data.ram_info.available / (1024**3)} GB<br>
+        //     Usage: ${data.ram_info.percent}%
+        // `);
+
+        // // Network Info
+        // $('#network-info').html(data.network_info.map(net => `
+        //     ${net.interface} (${net.type}) - IP: ${net.ip}, Speed: ${net.speed} Mbps
+        // `).join('<br>'));
+
+        // // ARP Table
+        // $('#arp-info').html(data.arp_table.map(entry => `
+        //     IP: ${entry.ip}, MAC: ${entry.mac}, Interface: ${entry.interface}
+        // `).join('<br>'));
+    });
+}
+
+// Update every 5 seconds
+setInterval(updateDashboard, 3000);
+
+// Initial update
+updateDashboard();
+</script>
+
+
+    <h3>RAM Information</h3>
+    <p>Total RAM: {{ (ram_info.total / (1024**3)) | round(2) }} GB</p>
+    <p>Available RAM: {{ (ram_info.available / (1024**3)) | round(2) }} GB</p>
+    <p>Used RAM: {{ (ram_info.used / (1024**3)) | round(2) }} GB</p>
+    <p>Usage: {{ ram_info.percent }}%</p>
+
+    <h3>Network Interfaces</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Interface</th>
+                <th>Type</th>
+                <th>IP Address</th>
+                <th>Speed (Mbps)</th>
+                <th>Bytes Sent</th>
+                <th>Bytes Received</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for net in network_info %}
+            <tr>
+                <td>{{ net.interface }}</td>
+                <td>{{ net.type }}</td>
+                <td>{{ net.ip if net.ip else "N/A" }}</td>
+                <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
+                <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
+                <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>ARP Table</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>MAC Address</th>
+                <th>Interface</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in arp_table %}
+            <tr>
+                <td>{{ entry.ip }}</td>
+                <td>{{ entry.mac }}</td>
+                <td>{{ entry.interface }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Active Network Connections</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Local IP</th>
+                <th>Local Port</th>
+                <th>Remote IP</th>
+                <th>Remote Port</th>
+                <th>PID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for conn in network_connections %}
+            <tr>
+                <td>{{ conn.local_ip }}</td>
+                <td>{{ conn.local_port }}</td>
+                <td>{{ conn.remote_ip }}</td>
+                <td>{{ conn.remote_port }}</td>
+                <td>{{ conn.pid }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Active Processes</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>PID</th>
+                <th>Name</th>
+                <th>CPU Usage (%)</th>
+                <th>RAM Usage (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for process in processes %}
+            <tr>
+                <td>{{ process.pid }}</td>
+                <td>{{ process.name }}</td>
+                <td>{{ process.cpu_usage }}</td>
+                <td>{{ process.ram_usage }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}
