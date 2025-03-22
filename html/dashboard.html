@@ -43,6 +43,43 @@
                 </ul>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-3">
+                <h3>RAM Information</h3>
+                <p>Total RAM: {{ (ram_info.total / (1024**3)) | round(2) }} GB</p>
+                <p>Available RAM: {{ (ram_info.available / (1024**3)) | round(2) }} GB</p>
+                <p>Used RAM: {{ (ram_info.used / (1024**3)) | round(2) }} GB</p>
+                <p>Usage: {{ ram_info.percent }}%</p>
+            </div>
+            <div class="col-9">
+                <h3>Network Interfaces</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Interface</th>
+                            <th>Type</th>
+                            <th>IP Address</th>
+                            <th>Speed (Mbps)</th>
+                            <th>Bytes Sent</th>
+                            <th>Bytes Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for net in network_info %}
+                        <tr>
+                            <td>{{ net.interface }}</td>
+                            <td>{{ net.type }}</td>
+                            <td>{{ net.ip if net.ip else "N/A" }}</td>
+                            <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
+                            <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
+                            <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     <!--
     <h3>CPU Information</h3>
 <p id="cpu-info">Loading...</p>
@@ -110,41 +147,8 @@ setInterval(updateDashboard, 3000);
 updateDashboard();
 </script>
 
-
-    <h3>RAM Information</h3>
-    <p>Total RAM: {{ (ram_info.total / (1024**3)) | round(2) }} GB</p>
-    <p>Available RAM: {{ (ram_info.available / (1024**3)) | round(2) }} GB</p>
-    <p>Used RAM: {{ (ram_info.used / (1024**3)) | round(2) }} GB</p>
-    <p>Usage: {{ ram_info.percent }}%</p>
-
-    <h3>Network Interfaces</h3>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>Interface</th>
-                <th>Type</th>
-                <th>IP Address</th>
-                <th>Speed (Mbps)</th>
-                <th>Bytes Sent</th>
-                <th>Bytes Received</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for net in network_info %}
-            <tr>
-                <td>{{ net.interface }}</td>
-                <td>{{ net.type }}</td>
-                <td>{{ net.ip if net.ip else "N/A" }}</td>
-                <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
-                <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
-                <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
     <h3>ARP Table</h3>
-    <table border="1">
+    <table class="table table-bordered">
         <thead>
             <tr>
                 <th>IP Address</th>
@@ -164,7 +168,7 @@ updateDashboard();
     </table>
 
     <h3>Active Network Connections</h3>
-    <table border="1">
+    <table class="table table-bordered">
         <thead>
             <tr>
                 <th>Local IP</th>
@@ -188,7 +192,7 @@ updateDashboard();
     </table>
 
     <h3>Active Processes</h3>
-    <table border="1">
+    <table class="table table-bordered">
         <thead>
             <tr>
                 <th>PID</th>

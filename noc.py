@@ -43,12 +43,42 @@ def get_cpu_info():
     return cpu_info
 
 def get_ram_info():
+    # Отримуємо основну інформацію про пам'ять
     mem = psutil.virtual_memory()
+    
+    # Використовуємо dmidecode для детальної інформації про модулі пам'яті
+    result = subprocess.run(['sudo', 'dmidecode', '--type', '17'], stdout=subprocess.PIPE)
+    output = result.stdout.decode()
+
+    ram_info = []
+    current_ram = {}
+    
+    for line in output.splitlines():
+        # Шукаємо розмір планки
+        if "Size" in line:
+            if "No Module Installed" not in line:
+                size = line.split(":")[1].strip()
+                current_ram['size'] = size
+        # Шукаємо швидкість планки
+        elif "Speed" in line:
+            speed = line.split(":")[1].strip()
+            current_ram['speed'] = speed
+        # Коли знаходимо нову планку пам'яті
+        elif "Locator" in line:
+            if current_ram:
+                ram_info.append(current_ram)  # додаємо попередню планку
+            current_ram = {}  # очищуємо поточну інформацію для нової планки
+
+    if current_ram:
+        ram_info.append(current_ram)  # додаємо останню планку, якщо є
+
+    # Повертати загальну інформацію про пам'ять разом з деталями про планки
     return {
         "total": mem.total,
         "available": mem.available,
         "used": mem.used,
-        "percent": mem.percent
+        "percent": mem.percent,
+        "ram_modules": ram_info  # додано деталі про планки пам'яті
     }
 
 def get_interface_type(iface):
