@@ -74,8 +74,8 @@
                                 {{ ip }}<br>
                             {% endfor %}</td>
                             <td id="ether_{{ loop.index0 }}" style="background: linear-gradient(to right, #6BCBD5 0%, #6BCBD5 {{ net.utilization }}%, #ffffff {{ net.utilization }}%, #ffffff 100%);">{{ net.speed if net.speed > 0 else "Unknown" }}</td>
-                            <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
-                            <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
+                            <td id="ether_tx_{{ loop.index0 }}">{{ (net.bytes_sent / (1000**2)) | round(2) }} MB</td>
+                            <td id="ether_rx_{{ loop.index0 }}">{{ (net.bytes_received / (1000**2)) | round(2) }} MB</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -127,6 +127,8 @@ function updateDashboard() {
             $('#ether_' + k).css({
                 "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${net.utilization}%, #ffffff ${net.utilization}%, #ffffff 100%)`
             });
+            $('#ether_tx_' + k).html((net.bytes_sent / (1000**2)).toFixed(2) + ' MB');
+            $('#ether_rx_' + k).html((net.bytes_received / (1000**2)).toFixed(2) + ' MB');
         });
 
         //     Total Cores: ${data.cpu_info.total_cores}<br>

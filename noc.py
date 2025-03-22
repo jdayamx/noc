@@ -387,9 +387,9 @@ def update_arp_table():
     arp_entries = get_arp_table()
     with sqlite3.connect(DATABASE_NET) as conn:
         for entry in arp_entries:
-            conn.execute('''INSERT OR REPLACE INTO ip (ip, mac, interface, status, updated_at) 
-                            VALUES (?, ?, ?, ?, datetime('now'))''',
-                         (entry["ip"], entry["mac"], entry["interface"], 'Active'))
+            conn.execute('''INSERT OR REPLACE INTO ip (ip, mac, status, updated_at) 
+                            VALUES (?, ?, ?, datetime('now'))''',
+                         (entry["ip"], entry["mac"], 'Active'))
         conn.commit()
 
 def start_scheduler():
