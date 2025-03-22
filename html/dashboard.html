@@ -47,9 +47,9 @@
         <div class="row">
             <div class="col-3">
                 <h3>RAM Information</h3>
-                <p>Total RAM: {{ (ram_info.total / (1024**3)) | round(2) }} GB</p>
-                <p>Available RAM: {{ (ram_info.available / (1024**3)) | round(2) }} GB</p>
-                <p>Used RAM: {{ (ram_info.used / (1024**3)) | round(2) }} GB</p>
+                <p>Total RAM: {{ (ram_info.total / (1000**3)) | round(2) }} GB</p>
+                <p>Available RAM: {{ (ram_info.available / (1000**3)) | round(2) }} GB</p>
+                <p>Used RAM: {{ (ram_info.used / (1000**3)) | round(2) }} GB</p>
                 <p>Usage: {{ ram_info.percent }}%</p>
             </div>
             <div class="col-9">
@@ -70,7 +70,9 @@
                         <tr>
                             <td>{{ net.interface }}</td>
                             <td>{{ net.type }}</td>
-                            <td>{{ net.ip if net.ip else "N/A" }}</td>
+                            <td>{% for ip in net.ips %}
+                                {{ ip }}<br>
+                            {% endfor %}</td>
                             <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
                             <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
                             <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>

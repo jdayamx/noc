@@ -108,19 +108,19 @@ def get_network_info():
 
     network_info = []
     for iface, addrs in interfaces.items():
-        ip = None
+        ips = []  
         conn_type = get_interface_type(iface)
 
         for addr in addrs:
             if addr.family == 2:  # AF_INET (IPv4)
-                ip = addr.address
+                ips.append(addr.address)
 
         speed = stats[iface].speed if iface in stats else 0
         net_stats = traffic.get(iface, None)
 
         network_info.append({
             "interface": iface,
-            "ip": ip,
+            "ips": ips,  
             "type": conn_type,
             "speed": speed,
             "bytes_sent": net_stats.bytes_sent if net_stats else 0,

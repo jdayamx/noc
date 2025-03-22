@@ -19,7 +19,9 @@
                         <tr>
                             <td>{{ net.interface }}</td>
                             <td>{{ net.type }}</td>
-                            <td>{{ net.ip if net.ip else "N/A" }}</td>
+                            <td>{% for ip in net.ips %}
+                                {{ ip }}<br>
+                            {% endfor %}</td>
                             <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
                             <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
                             <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
