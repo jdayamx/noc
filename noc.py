@@ -7,6 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import sqlite3
 import os
 import time
+import threading
 
 previous_traffic = {}
 
@@ -170,6 +171,11 @@ def get_network_info():
         speed = stats[iface].speed if iface in stats else 0  # Мбіт/с
         net_stats = current_traffic.get(iface, None)
 
+        # Ініціалізація значень
+        bytes_sent = 0
+        bytes_received = 0
+        utilization = 0
+
         if net_stats:
             prev_data = previous_traffic.get(iface, {"bytes_sent": net_stats.bytes_sent, "bytes_received": net_stats.bytes_recv, "time": current_time})
             time_diff = current_time - prev_data["time"]
@@ -192,9 +198,10 @@ def get_network_info():
             else:
                 utilization = 0
         else:
-            utilization = 0
+            # Якщо немає статистики, значення залишаються 0
             bytes_sent = 0
             bytes_received = 0
+            utilization = 0
 
         # Оновлюємо попередні значення
         previous_traffic[iface] = {
@@ -389,6 +396,12 @@ def start_scheduler():
     scheduler = BackgroundScheduler()
     scheduler.add_job(update_arp_table, 'interval', minutes=15)
     scheduler.start()
+    # Додаємо шедулер до окремого потоку
+    def scheduler_thread():
+        while True:
+            time.sleep(1)  # Не даємо потоку зупинитись
+    thread = threading.Thread(target=scheduler_thread)
+    thread.start()
 
 if __name__ == '__main__':
     init_db()
