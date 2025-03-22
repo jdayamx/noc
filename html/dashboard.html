@@ -147,50 +147,6 @@ setInterval(updateDashboard, 3000);
 updateDashboard();
 </script>
 
-    <h3>ARP Table</h3>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>IP Address</th>
-                <th>MAC Address</th>
-                <th>Interface</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for entry in arp_table %}
-            <tr>
-                <td>{{ entry.ip }}</td>
-                <td>{{ entry.mac }}</td>
-                <td>{{ entry.interface }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h3>Active Network Connections</h3>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Local IP</th>
-                <th>Local Port</th>
-                <th>Remote IP</th>
-                <th>Remote Port</th>
-                <th>PID</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for conn in network_connections %}
-            <tr>
-                <td>{{ conn.local_ip }}</td>
-                <td>{{ conn.local_port }}</td>
-                <td>{{ conn.remote_ip }}</td>
-                <td>{{ conn.remote_port }}</td>
-                <td>{{ conn.pid }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
     <h3>Active Processes</h3>
     <table class="table table-bordered">
         <thead>

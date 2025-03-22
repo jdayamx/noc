@@ -227,6 +227,14 @@ def get_dashboard_data():
         'arp_table': arp_table
     })
 
+@app.route('/lan')
+def lan():
+    network_info = get_network_info()
+    arp_table = get_arp_table()
+    network_connections = get_network_connections()
+    return render_template('lan.html', network_info=network_info, 
+                           arp_table=arp_table, network_connections=network_connections)
+
 @app.route('/', methods=['GET'])
 def home():
     if 'username' in session:
@@ -263,12 +271,10 @@ def dashboard():
     network_info = get_network_info()
     arp_table = get_arp_table()
     processes = get_processes()
-    network_connections = get_network_connections()
     return render_template('dashboard.html', username=session['username'], 
                            cpu_info=cpu_info, disk_info=disk_info, 
                            ram_info=ram_info, network_info=network_info, 
-                           arp_table=arp_table, processes=processes, 
-                           network_connections=network_connections)
+                           arp_table=arp_table, processes=processes)
 
 @app.route('/logout')
 def logout():

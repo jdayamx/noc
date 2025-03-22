@@ -1,0 +1,76 @@
+{% extends 'main.html' %}
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <h3>Network Interfaces</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Interface</th>
+                            <th>Type</th>
+                            <th>IP Address</th>
+                            <th>Speed (Mbps)</th>
+                            <th>Bytes Sent</th>
+                            <th>Bytes Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for net in network_info %}
+                        <tr>
+                            <td>{{ net.interface }}</td>
+                            <td>{{ net.type }}</td>
+                            <td>{{ net.ip if net.ip else "N/A" }}</td>
+                            <td>{{ net.speed if net.speed > 0 else "Unknown" }}</td>
+                            <td>{{ (net.bytes_sent / (1024**2)) | round(2) }} MB</td>
+                            <td>{{ (net.bytes_received / (1024**2)) | round(2) }} MB</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+        <h3>ARP Table</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>MAC Address</th>
+                <th>Interface</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in arp_table %}
+            <tr>
+                <td>{{ entry.ip }}</td>
+                <td>{{ entry.mac }}</td>
+                <td>{{ entry.interface }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Active Network Connections</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Local IP</th>
+                <th>Local Port</th>
+                <th>Remote IP</th>
+                <th>Remote Port</th>
+                <th>PID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for conn in network_connections %}
+            <tr>
+                <td>{{ conn.local_ip }}</td>
+                <td>{{ conn.local_port }}</td>
+                <td>{{ conn.remote_ip }}</td>
+                <td>{{ conn.remote_port }}</td>
+                <td>{{ conn.pid }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}
