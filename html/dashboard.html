@@ -47,10 +47,41 @@
         <div class="row">
             <div class="col-3">
                 <h3>RAM Information</h3>
-                <p>Total RAM: {{ (ram_info.total / (1000**3)) | round(2) }} GB</p>
-                <p>Available RAM: {{ (ram_info.available / (1000**3)) | round(2) }} GB</p>
-                <p>Used RAM: {{ (ram_info.used / (1000**3)) | round(2) }} GB</p>
-                <p>Usage: {{ ram_info.percent }}%</p>
+                <p>Total RAM: {{ (ram_info.total / (1000**3)) | round(2) }} GB<br>
+                <span class="badge" style="background-color: #0E5582;">Usage (GB)</span> <span class="badge" style="background-color: #6BCBD5;">Aviable (GB)</span><br>
+                Usage: <span id="ram_info_percent">{{ ram_info.percent }}</span>%</p>
+                <style>
+                    .chart-container {
+                        position: relative;
+                        width: 200px;
+                        height: 200px;
+                    }
+                    .chart {
+                        width: 100%;
+                        height: 100%;
+                        border-radius: 50%;
+                        background: conic-gradient(
+                            #0E5582 0deg var(--usage-angle),   /* Used RAM */
+                            #6BCBD5 var(--usage-angle) 360deg  /* Available RAM */
+                        );
+                    }
+                    .label {
+                        position: absolute;
+                        font-size: 14px;
+                        font-weight: bold;
+                        color: white;
+                        text-align: center;
+                        width: 50px;
+                        height: 20px;
+                        line-height: 20px;
+                        transform: translate(-50%, -50%);
+                    }
+                </style>
+                <div class="chart-container" id="chart" style="--usage-angle: {{ ram_info.percent * 3.6 }}deg">
+                    <div class="chart"></div>
+                    <div class="label" id="label-usage">{{ (ram_info.used / (1000**3)) | round(2) }}</div>
+                    <div class="label" id="label-available">{{ (ram_info.available / (1000**3)) | round(2) }}</div>
+                </div>
             </div>
             <div class="col-9">
                 <h3>Network Interfaces</h3>
@@ -99,6 +130,26 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 function updateDashboard() {
+    function positionLabels(usagePercent) {
+        const usageAngle = (usagePercent / 100) * 360;
+        const centerX = 100;
+        const centerY = 100;
+        const radius = 50;
+
+        const usageRadians = (usageAngle / 2 - 90) * (Math.PI / 180);
+        const availableRadians = ((usageAngle + (360 - usageAngle) / 2) - 90) * (Math.PI / 180);
+
+        const usageX = centerX + radius * Math.cos(usageRadians);
+        const usageY = centerY + radius * Math.sin(usageRadians);
+        const availableX = centerX + radius * Math.cos(availableRadians);
+        const availableY = centerY + radius * Math.sin(availableRadians);
+
+        document.getElementById('label-usage').style.left = `${usageX}px`;
+        document.getElementById('label-usage').style.top = `${usageY}px`;
+        document.getElementById('label-available').style.left = `${availableX}px`;
+        document.getElementById('label-available').style.top = `${availableY}px`;
+    }
+    positionLabels({{ ram_info.percent }});
     $.get('/get_dashboard_data', function(data) {
         // CPU Info
         $('#cpu_usage').html(`${data.cpu_info.cpu_usage}`);
@@ -137,7 +188,11 @@ function updateDashboard() {
         // `);
 
 
-        // // RAM Info
+        // RAM Info
+        positionLabels(data.ram_info.percent);
+        $('#ram_info_percent').html(data.ram_info.percent);
+        $('#label-usage').html((data.ram_info.used / (1024**3)).toFixed(2));
+        $('#label-available').html((data.ram_info.available / (1024**3)).toFixed(2));
         // $('#ram-info').html(`
         //     Total RAM: ${data.ram_info.total / (1024**3)} GB<br>
         //     Used RAM: ${data.ram_info.used / (1024**3)} GB<br>
