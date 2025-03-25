@@ -1,0 +1,19 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <form method="POST">
+            <h3>Add User</h3>
+            
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required class="form-control mb-3"><br>
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required class="form-control mb-3"><br>
+
+            <button type="submit" class="btn btn-primary">Add User</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

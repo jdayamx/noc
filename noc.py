@@ -1,13 +1,15 @@
 import psutil
 import subprocess
-from flask import Flask, render_template, request, redirect, url_for, session
-from flask import jsonify
+from flask import  jsonify, flash, Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
 import sqlite3
 import os
 import time
 import threading
+import pyudev
+import socket
+import re
 
 previous_traffic = {}
 
@@ -286,6 +288,24 @@ def get_network_connections():
     
     return connections
 
+def get_usb_devices():
+    devices = []
+    context = pyudev.Context()
+    
+    for device in context.list_devices(subsystem='usb', DEVTYPE='usb_device'):
+        vendor = device.get('ID_VENDOR', 'Unknown Vendor')
+        product = device.get('ID_MODEL', 'Unknown Device')
+        busnum = device.get('BUSNUM', 'N/A')
+        devnum = device.get('DEVNUM', 'N/A')
+
+        devices.append({
+            "bus": busnum,
+            "device": devnum,
+            "name": f"{vendor} {product}"
+        })
+
+    return devices
+
 def get_processes():
     processes = []
     
@@ -354,6 +374,89 @@ def login():
         
     return render_template('login.html')
 
+@app.route('/user/list')
+def user_list():
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users")
+        users = cursor.fetchall()
+
+    return render_template('user_list.html', users=users)
+
+@app.route('/user/edit/<username>', methods=['GET', 'POST'])
+def edit_user(username):
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+
+        if request.method == 'POST':
+            updated_username = request.form['username']
+            change_password = request.form.get('change_password')
+
+            # Якщо обрано змінити пароль
+            if change_password:
+                new_password = request.form['password']
+                confirm_password = request.form['confirm_password']
+
+                if len(updated_username) < 3:
+                    flash('Username must be at least 3 characters long.', 'danger')
+                    return render_template('edit_user.html', user=user)
+                
+                # Перевіряємо, чи співпадають паролі
+                if new_password != confirm_password:
+                    flash("Passwords do not match!", "danger")
+                    return render_template('edit_user.html', user=user)
+                
+                # Хешуємо новий пароль
+                hashed_password = generate_password_hash(new_password)
+            else:
+                # Якщо пароль не змінюється, залишаємо старий хешований пароль
+                hashed_password = user[1]  # Візьмемо пароль з БД, який вже хешований
+
+            cursor.execute('''
+                UPDATE users
+                SET username = ?, password = ?
+                WHERE username = ?
+            ''', (updated_username, hashed_password, username))
+            conn.commit()
+            return redirect('/user/list')
+
+        return render_template('edit_user.html', user=user, request=request)
+@app.route('/user/add', methods=['GET', 'POST'])
+def user_add():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        if len(username) < 3:
+            flash('Username must be at least 3 characters long.', 'danger')
+            return redirect(url_for('user_add'))
+        
+        # Додавання нового користувача в базу даних
+        with sqlite3.connect(DATABASE) as conn:
+            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', 
+                         (username, generate_password_hash(password)))
+            conn.commit()
+
+        flash('User added successfully!', 'success')
+        return redirect(url_for('user_list'))
+
+    return render_template('user_add.html')
+
+@app.route('/user/delete/<username>', methods=['GET'])
+def delete_user(username):
+    if username == 'admin':
+        flash('Cannot delete the admin user.', 'danger')
+        return redirect(url_for('user_list'))
+
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute('DELETE FROM users WHERE username = ?', (username,))
+        conn.commit()
+
+    flash(f'User {username} deleted successfully!', 'success')
+    return redirect(url_for('user_list'))  # Переходимо до списку користувачів
+
 @app.route('/dashboard')
 def dashboard():
     if 'username' not in session:
@@ -364,10 +467,12 @@ def dashboard():
     network_info = get_network_info()
     arp_table = get_arp_table()
     processes = get_processes()
+    usb_devices = get_usb_devices()
     return render_template('dashboard.html', username=session['username'], 
                            cpu_info=cpu_info, disk_info=disk_info, 
                            ram_info=ram_info, network_info=network_info, 
-                           arp_table=arp_table, processes=processes)
+                           arp_table=arp_table, processes=processes,
+                           usb_devices=usb_devices)
 
 @app.route('/logout')
 def logout():

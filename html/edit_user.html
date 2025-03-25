@@ -1,0 +1,45 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <h3 class="mb-4">Edit User</h3>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="username" class="form-label">Username:</label>
+                <input type="text" class="form-control" id="username" name="username" value="{{ user[0] }}" required>
+            </div>
+            
+            <label for="change_password">Change Password:</label>
+            <input type="checkbox" id="change_password" name="change_password" {% if request.form.change_password %}checked{% endif %}><br><br>
+
+            <div id="password_fields"{% if not request.form.change_password %}style="display: none;"{% endif %}>
+                <div class="mb-3">
+                    <label for="password" class="form-label">New Password:</label>
+                    <input type="password" class="form-control" id="password" name="password" value="{{ request.form.password }}">
+                </div>
+                <div class="mb-3">
+                    <label for="confirm_password" class="form-label">Confirm Password:</label>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" value="{{ request.form.confirm_password }}">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // JavaScript для показу полів пароля, коли вибрано чекбокс
+    document.getElementById("change_password").addEventListener("change", function() {
+        var passwordFields = document.getElementById("password_fields");
+        if (this.checked) {
+            passwordFields.style.display = "block";
+        } else {
+            passwordFields.style.display = "none";
+        }
+    });
+</script>
+{% endblock %}

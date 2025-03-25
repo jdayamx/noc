@@ -164,6 +164,26 @@ setInterval(updateDashboard, 3000);
 updateDashboard();
 </script>
 
+<h3>Connected USB Devices</h3>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Bus</th>
+            <th>Device</th>
+            <th>Name</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for device in usb_devices %}
+        <tr>
+            <td>{{ device.bus }}</td>
+            <td>{{ device.device }}</td>
+            <td>{{ device.name }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
     <h3>Active Processes</h3>
     <table class="table table-bordered">
         <thead>
