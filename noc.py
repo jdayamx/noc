@@ -8,7 +8,6 @@ import os
 import time
 import threading
 import pyudev
-import bluetooth
 import re
 from math import ceil
 
