@@ -1,0 +1,24 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <h3 class="mb-4">Edit IP</h3>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="ip" class="form-label">IP:</label>
+                <input type="text" class="form-control" id="ip" name="ip" value="{{ ip['ip'] if ip else '' }}" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="mac" class="form-label">MAC:</label>
+                <input type="text" class="form-control" id="mac" name="mac" value="{{ ip['mac'] if ip else '' }}" required>
+            </div>
+
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

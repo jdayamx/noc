@@ -8,8 +8,9 @@ import os
 import time
 import threading
 import pyudev
-import socket
+import bluetooth
 import re
+from math import ceil
 
 previous_traffic = {}
 
@@ -324,6 +325,13 @@ def get_processes():
     # Спочатку сортуємо за CPU, якщо рівне – сортуємо за RAM
     return sorted(processes, key=lambda x: (x["cpu_usage"], x["ram_usage"]), reverse=True)
 
+def scan_bluetooth_devices():
+    try:
+        nearby_devices = bluetooth.discover_devices(duration=5, lookup_names=True)
+        return nearby_devices if nearby_devices else []
+    except Exception as e:
+        return str(e)
+
 @app.route('/get_dashboard_data')
 def get_dashboard_data():
     cpu_info = get_cpu_info()
@@ -382,6 +390,109 @@ def user_list():
         users = cursor.fetchall()
 
     return render_template('user_list.html', users=users)
+
+@app.route('/ip/list')
+def ip_list():
+    # Кількість елементів на сторінці
+    per_page = 15
+    
+    # Отримуємо поточну сторінку з параметрів запиту, якщо вона є
+    page = request.args.get('page', 1, type=int)
+
+    # Обчислюємо зсув для запиту
+    offset = (page - 1) * per_page
+
+    with sqlite3.connect(DATABASE_NET) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Загальний запит для отримання кількості IP-адрес
+        cursor.execute("SELECT COUNT(*) FROM ip")
+        total_ips = cursor.fetchone()[0]
+        
+        # Запит для отримання IP-адрес на поточній сторінці
+        cursor.execute("SELECT * FROM ip LIMIT ? OFFSET ?", (per_page, offset))
+        ips = [dict(row) for row in cursor.fetchall()]
+
+    # Обчислюємо загальну кількість сторінок
+    total_pages = ceil(total_ips / per_page)
+
+    return render_template('ip_list.html', ips=ips, page=page, total_pages=total_pages)
+
+def is_valid_ip(ip):
+    """Перевіряє, чи є рядок коректною IP-адресою (IPv4)."""
+    pattern = r"^\d{1,3}(\.\d{1,3}){3}$"
+    if not re.match(pattern, ip):
+        return False
+    return all(0 <= int(octet) <= 255 for octet in ip.split('.'))
+
+def is_valid_mac(mac):
+    """Перевіряє, чи є рядок коректною MAC-адресою."""
+    pattern = r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+    return bool(re.match(pattern, mac))
+
+@app.route('/ip/add', methods=['GET', 'POST'])
+def ip_add():
+    if request.method == 'POST':
+        new_ip = request.form['username']
+        new_mac = request.form['password']
+
+        if not is_valid_ip(new_ip):
+            flash('Invalid IP address format.', 'danger')
+            return redirect(url_for('ip_add'))
+
+        if not is_valid_mac(new_mac):
+            flash('Invalid MAC address format.', 'danger')
+            return redirect(url_for('ip_add'))
+        
+        # Додавання нового користувача в базу даних
+        with sqlite3.connect(DATABASE_NET) as conn:
+            conn.execute('INSERT INTO ip (ip, mac) VALUES (?, ?)', 
+                         (new_ip, new_mac))
+            conn.commit()
+
+        flash(f'IP {new_ip} added successfully!', 'success')
+        return redirect(url_for('ip_list'))
+
+    return render_template('ip_edit.html')
+@app.route('/ip/edit/<id>', methods=['GET', 'POST'])
+def ip_edit(id):
+    with sqlite3.connect(DATABASE_NET) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ip WHERE id = ?", (id,))
+        ip = cursor.fetchone()
+
+        if request.method == 'POST':
+            new_ip = request.form.get('ip', '').strip()
+            new_mac = request.form.get('mac', '').strip()
+
+            if not is_valid_ip(new_ip):
+                flash('Invalid IP address format.', 'danger')
+                return render_template('ip_edit.html', ip=ip)
+
+            if not is_valid_mac(new_mac):
+                flash('Invalid MAC address format.', 'danger')
+                return render_template('ip_edit.html', ip=ip)
+
+            cursor.execute('''
+                UPDATE ip
+                SET ip = ?, mac = ?, updated_at = datetime('now')
+                WHERE id = ?
+            ''', (new_ip, new_mac, id))
+            conn.commit()
+            return redirect('/ip/list')
+
+        return render_template('ip_edit.html', ip=ip, request=request)
+
+@app.route('/ip/delete/<id>', methods=['GET'])
+def ip_delete(id):
+    with sqlite3.connect(DATABASE_NET) as conn:
+        conn.execute('DELETE FROM ip WHERE id = ?', (id,))
+        conn.commit()
+
+    flash(f'IP deleted successfully!', 'success')
+    return redirect(url_for('ip_list'))  # Переходимо до списку користувачів
 
 @app.route('/user/edit/<username>', methods=['GET', 'POST'])
 def edit_user(username):
@@ -468,6 +579,7 @@ def dashboard():
     arp_table = get_arp_table()
     processes = get_processes()
     usb_devices = get_usb_devices()
+    
     return render_template('dashboard.html', username=session['username'], 
                            cpu_info=cpu_info, disk_info=disk_info, 
                            ram_info=ram_info, network_info=network_info, 
