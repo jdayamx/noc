@@ -34,11 +34,11 @@
             </div>
             <div class="col-5">
                 <h3><i class="las la-microchip"></i> CPU Information ({{ cpu_info.physical_cores }} core)</h3>
-                <p>Overall CPU Usage: <span id="cpu_usage">{{ cpu_info.cpu_usage }}</span>%</p>
+                <p>{{ cpu_info.cpu_name }} ({{ cpu_info.architecture }}) Usage: <span id="cpu_usage">{{ cpu_info.cpu_usage }}</span>%</p>
                 <h5>Per-Core Usage:</h5>
                 <ul class="list-group">
-                    {% for usage in cpu_info.per_core_usage %}
-                        <li id="sub_core_{{ loop.index0 }}" class="list-group-item" style="background: linear-gradient(to right, #6BCBD5 0%, #6BCBD5 {{ usage }}%, #ffffff {{ usage }}%, #ffffff 100%);">Core {{ loop.index0 }}: <span id="sub_core_val_{{ loop.index0 }}">{{ usage }}</span>%</li>
+                    {% for core in cpu_info.cores %}
+                        <li id="sub_core_{{ core.core }}" class="list-group-item" style="background: linear-gradient(to right, #6BCBD5 0%, #6BCBD5 {{ usage }}%, #ffffff {{ usage }}%, #ffffff 100%);">Core {{ core.core }}: <span id="sub_core_usage_{{ core.core }}">{{ core.usage }}</span>% - <span id="sub_core_frequency_{{ core.core }}">{{ core.frequency }}</span>GHz</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -152,18 +152,19 @@ function updateDashboard() {
     positionLabels({{ ram_info.percent }});
     $.get('/get_dashboard_data', function(data) {
         // CPU Info
-        $('#cpu_usage').html(`${data.cpu_info.cpu_usage}`);
-        data.cpu_info.per_core_usage.forEach((entry, k) => { 
-            $('#sub_core_val_' + k).html(entry);
+        $('#cpu_usage').html(`${data.cpu_info.cpu_usage_total}`);
+        data.cpu_info.cores.forEach((entry) => { 
+            $('#sub_core_usage_' + entry.core).html(entry.usage);
+            $('#sub_core_vfrequency_' + entry.core).html(entry.frequency);
             var color = '#6BCBD5';
-            if (entry > 55) {
+            if (entry.usage > 55) {
                 color = '#F79131';
             }
-            if (entry > 90) {
+            if (entry.usage > 90) {
                 color = '#8B173E';
             }
-            $('#sub_core_' + k).css({
-                "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${entry}%, #ffffff ${entry}%, #ffffff 100%)`
+            $('#sub_core_' + entry.core).css({
+                "background": `linear-gradient(to right, #6BCBD5 0%, ${color} ${entry.usage}%, #ffffff ${entry.usage}%, #ffffff 100%)`
             });
         });
 

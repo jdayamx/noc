@@ -7,7 +7,11 @@ import sqlite3
 import os
 import time
 import threading
-import pyudev
+import platform
+if platform.system() == "Linux":
+    import pyudev
+else:
+    import wmi
 import re
 from math import ceil
 
@@ -84,13 +88,60 @@ def add_default_users():
         conn.executemany('INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)', users)
         conn.commit()
 
+def get_cpu_name():
+    system = platform.system()
+
+    if system == "Linux":
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if "model name" in line:
+                        return line.strip().split(":")[1].strip()
+        except Exception:
+            pass
+
+    elif system == "Windows":
+        try:
+            output = subprocess.check_output("wmic cpu get name", shell=True).decode()
+            lines = output.strip().split("\n")
+            if len(lines) > 1:
+                return lines[1].strip()
+        except Exception:
+            pass
+
+    elif system == "Darwin":  # macOS
+        try:
+            output = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"]).decode().strip()
+            return output
+        except Exception:
+            pass
+
+    # Fallback
+    return platform.processor() or "Unknown CPU"
+
 def get_cpu_info():
+    usage = psutil.cpu_percent(interval=0.1, percpu=True)
+    freq_list = psutil.cpu_freq(percpu=True)
+
+    cores_info = []
+    for i, (core_usage, freq) in enumerate(zip(usage, freq_list)):
+        cores_info.append({
+            "core": i,
+            "usage": core_usage,
+            "frequency": round(freq.current, 2) if freq else None,
+            "min_freq": round(freq.min, 2) if freq else None,
+            "max_freq": round(freq.max, 2) if freq else None
+        })
+
     cpu_info = {
+        "cpu_name": get_cpu_name(),
+        "architecture": platform.machine(),
         "physical_cores": psutil.cpu_count(logical=False),
         "total_cores": psutil.cpu_count(logical=True),
-        "cpu_usage": psutil.cpu_percent(interval=0),  # Використовує останнє значення без очікування
-        "per_core_usage": psutil.cpu_percent(interval=0, percpu=True)
+        "cpu_usage_total": psutil.cpu_percent(interval=0),
+        "cores": cores_info
     }
+
     return cpu_info
 
 def get_ram_info():
@@ -260,17 +311,28 @@ def get_disk_info():
     partitions = psutil.disk_partitions()
 
     for partition in partitions:
-        usage = psutil.disk_usage(partition.mountpoint)
-        disk_info.append({
-            "device": partition.device,
-
-            "mountpoint": partition.mountpoint,
-            "fstype": partition.fstype,
-            "size": usage.total,
-            "free": usage.free,
-            "used": usage.used,
-            "percent": usage.percent
-        })
+        print(f"Перевіряємо розділ: {partition.device}, mountpoint: {partition.mountpoint}")
+        # Перевіряємо, чи правильний формат шляху
+        
+        if partition.mountpoint and partition.mountpoint != '':  # Перевірка на наявність шляху
+            try:
+                # Отримуємо інформацію про використання кожного розділу
+                usage = psutil.disk_usage(partition.mountpoint)
+                mountpoint = partition.mountpoint
+                if platform.system() == "Linux":
+                    mountpoint = partition.mountpoint.replace('\\', '/')
+                # Додаємо інформацію в список
+                disk_info.append({
+                    "device": partition.device,
+                    "mountpoint": mountpoint,
+                    "fstype": partition.fstype,
+                    "size": usage.total,
+                    "free": usage.free,
+                    "used": usage.used,
+                    "percent": usage.percent
+                })
+            except Exception as e:
+                print(f"Не вдалося отримати інформацію для {partition.device}: {str(e)}")
     return disk_info
 
 def get_network_connections():
@@ -290,19 +352,29 @@ def get_network_connections():
 
 def get_usb_devices():
     devices = []
-    context = pyudev.Context()
-    
-    for device in context.list_devices(subsystem='usb', DEVTYPE='usb_device'):
-        vendor = device.get('ID_VENDOR', 'Unknown Vendor')
-        product = device.get('ID_MODEL', 'Unknown Device')
-        busnum = device.get('BUSNUM', 'N/A')
-        devnum = device.get('DEVNUM', 'N/A')
+    if platform.system() == "Linux":
+        context = pyudev.Context()
+        
+        for device in context.list_devices(subsystem='usb', DEVTYPE='usb_device'):
+            vendor = device.get('ID_VENDOR', 'Unknown Vendor')
+            product = device.get('ID_MODEL', 'Unknown Device')
+            busnum = device.get('BUSNUM', 'N/A')
+            devnum = device.get('DEVNUM', 'N/A')
 
-        devices.append({
-            "bus": busnum,
-            "device": devnum,
-            "name": f"{vendor} {product}"
-        })
+            devices.append({
+                "bus": busnum,
+                "device": devnum,
+                "name": f"{vendor} {product}"
+            })
+    else:
+        c = wmi.WMI()
+        for usb in c.Win32_PnPEntity():
+            if "USB" in usb.Caption:
+                devices.append({
+                    "bus": "N/A",
+                    "device": usb.DeviceID,
+                    "name": usb.Caption
+                })
 
     return devices
 
