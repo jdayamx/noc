@@ -48,7 +48,7 @@
   }
 
   .overlay.visible {
-    display: flex; /* Показуємо оверлей */
+    display: flex !important;
   }
   
   /* Animation container */
