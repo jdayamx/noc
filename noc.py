@@ -657,6 +657,52 @@ def dashboard():
                            arp_table=arp_table, processes=processes,
                            usb_devices=usb_devices)
 
+def get_project_path():
+    return os.path.dirname(os.path.abspath(__file__))
+
+# Функція для додавання репозиторію до safe.directory, якщо його ще немає
+def add_safe_directory(project_path):
+    try:
+        # Перевіряємо, чи вже є цей каталог в safe.directory
+        result = subprocess.run(['git', 'config', '--global', '--get', 'safe.directory'], capture_output=True, text=True)
+        safe_directories = result.stdout.splitlines()
+
+        # Якщо каталогу ще немає в safe.directory, додаємо його
+        if project_path not in safe_directories:
+            subprocess.run(['git', 'config', '--global', '--add', 'safe.directory', project_path], check=True)
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Помилка при перевірці safe.directory: {e.stderr}")
+
+@app.route('/update_project', methods=['POST'])
+def update_project():
+    try:
+        # Визначаємо шлях до каталогу проекту
+        project_path = get_project_path()
+
+        # Додаємо репозиторій до безпечних директорій, якщо ще не додано
+        add_safe_directory(project_path)
+
+        # Перевіряємо, чи є нові зміни в репозиторії
+        result = subprocess.run(['git', 'fetch'], cwd=project_path, check=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            return jsonify({'message': f'Помилка при git fetch: {result.stderr}'}), 500
+        
+        # Оновлюємо проект
+        result = subprocess.run(['git', 'pull'], cwd=project_path, check=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            return jsonify({'message': f'Помилка при git pull: {result.stderr}'}), 500
+        
+        # Оновлюємо залежності
+        result = subprocess.run(['pip', 'install', '-r', 'requirements.txt'], cwd=project_path, check=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            return jsonify({'message': f'Помилка при pip install: {result.stderr}'}), 500
+
+        return jsonify({'message': 'Оновлення успішне!'}), 200
+    except subprocess.CalledProcessError as e:
+        return jsonify({'message': f'Помилка при оновленні: {e.stderr}'}), 500
+    except Exception as e:
+        return jsonify({'message': f'Неочікувана помилка: {str(e)}'}), 500
+
 @app.route('/logout')
 def logout():
     session.pop('username', None)

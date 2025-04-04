@@ -5,4 +5,4 @@ flask_login==0.6.3
 flask_paginate==2024.4.12
 apscheduler==3.10.4
 pyudev==0.24.1
-wmi==1.5.1
+wmi==1.5.1; sys_platform == 'win32'
