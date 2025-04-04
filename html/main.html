@@ -49,6 +49,19 @@
                 alert.classList.remove('show');
             });
         }, 5000); // Dismiss after 5 seconds
+        document.getElementById("updateButton").addEventListener("click", function() {
+            $.ajax({
+                url: '/update_project',
+                type: 'POST',
+                success: function(response) {
+                    alert("Update completed!");
+                },
+                error: function(xhr, status, error) {
+                    alert("Update error!");
+                }
+            });
+        });
+</script>
     </script>
     </body>
 </html>

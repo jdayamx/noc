@@ -218,18 +218,7 @@ setInterval(updateDashboard, 3000);
 
 // Initial update
 updateDashboard();
-document.getElementById("updateButton").addEventListener("click", function() {
-        $.ajax({
-            url: '/update_project',
-            type: 'POST',
-            success: function(response) {
-                alert("Оновлення виконано!");
-            },
-            error: function(xhr, status, error) {
-                alert("Помилка при оновленні!");
-            }
-        });
-    });
+
 </script>
 
 <h3>Connected USB Devices</h3>
