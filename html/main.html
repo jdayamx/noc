@@ -69,6 +69,7 @@
                 success: function(response) {
                     overlay.classList.toggle('visible');
                     alert("Update completed!");
+                    location.reload();
                 },
                 error: function(xhr, status, error) {
                     overlay.classList.toggle('visible');
