@@ -46,6 +46,10 @@
     align-items: center;
     z-index: 9999;
   }
+
+  .overlay.visible {
+    display: flex; /* Показуємо оверлей */
+  }
   
   /* Animation container */
   .animation-container {
