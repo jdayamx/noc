@@ -31,3 +31,93 @@
     --bs-btn-disabled-bg: #0A4467;
     --bs-btn-disabled-border-color: #0A4467;
 }
+
+  /* Overlay background */
+  .overlay {
+    display: none !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+  
+  /* Animation container */
+  .animation-container {
+    text-align: center;
+  }
+  
+  /* App Icon */
+  .app-icon {
+    font-size: 30px;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 20px;
+  }
+  
+  /* Squares for animation */
+  .squares {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  
+  .square {
+    width: 20px;
+    height: 20px;
+    margin: 5px;
+    background-color: #4CAF50;
+    animation: square-blink 1.5s infinite;
+  }
+  
+  /* Animation for squares */
+  .square:nth-child(1) {
+    animation-delay: 0s;
+  }
+  
+  .square:nth-child(2) {
+    animation-delay: 0.5s;
+  }
+  
+  .square:nth-child(3) {
+    animation-delay: 1s;
+  }
+  
+  /* Glowing effect for squares */
+  @keyframes square-blink {
+    0% {
+      opacity: 0.1;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+    100% {
+      opacity: 0.1;
+      transform: scale(0.8);
+    }
+  }
+  
+  /* Server icon animation */
+  .server-icon {
+    font-size: 50px;
+    color: white;
+    animation: server-glow 2s infinite alternate;
+  }
+  
+  /* Glowing effect for the server icon */
+  @keyframes server-glow {
+    0% {
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+    100% {
+      text-shadow: 0 0 15px rgba(0, 255, 255, 1), 0 0 30px rgba(0, 255, 255, 1);
+    }
+  }
+  
