@@ -29,8 +29,7 @@
               <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">Lan</a>
               <ul class="dropdown-menu">
                 <li><a class="dropdown-item" href="{{ url_for('ip_list') }}">IPs</a></li>
-                <!--<li><a class="dropdown-item" href="#">Another action</a></li>
-                <li><a class="dropdown-item" href="#">Something else here</a></li>-->
+                <li><a class="dropdown-item" href="{{ url_for('network.network_list') }}">Network</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="{{ url_for('lan') }}">Info</a></li>
               </ul>

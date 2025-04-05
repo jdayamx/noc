@@ -15,10 +15,12 @@ else:
 import re
 from math import ceil
 from libs import firewall
+from libs.network import network_bp
 
 previous_traffic = {}
 
 app = Flask(__name__, template_folder='html')
+app.register_blueprint(network_bp)
 app.secret_key = 'your_secret_key'
 
 DB_FOLDER = 'db'
@@ -506,8 +508,8 @@ def is_valid_mac(mac):
 @app.route('/ip/add', methods=['GET', 'POST'])
 def ip_add():
     if request.method == 'POST':
-        new_ip = request.form['username']
-        new_mac = request.form['password']
+        new_ip = request.form['ip']
+        new_mac = request.form['mac']
 
         if not is_valid_ip(new_ip):
             flash('Invalid IP address format.', 'danger')
@@ -564,7 +566,7 @@ def ip_delete(id):
         conn.commit()
 
     flash(f'IP deleted successfully!', 'success')
-    return redirect(url_for('ip_list'))  # Переходимо до списку користувачів
+    return redirect(url_for('ip_list'))
 
 @app.route('/user/edit/<username>', methods=['GET', 'POST'])
 def edit_user(username):

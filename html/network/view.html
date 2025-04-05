@@ -1,0 +1,20 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <h2>Network {{ row['ip_min'] }} - {{ row['ip_max'] }}</h2>
+        <table border="1" cellpadding="5" cellspacing="0" class="table table-bordered">
+            {% for i in range(0, ip_list|length, 16) %}
+                <tr>
+                    {% for ip_entry in ip_list[i:i+16] %}
+                        <td style="background-color: {{ ip_entry.color }};text-align:center;">
+                            {{ ip_entry.number }} 
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endblock %}

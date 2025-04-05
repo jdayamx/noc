@@ -1,9 +1,6 @@
 import platform
 import subprocess
 
-import subprocess
-import platform
-
 def check_ufw():
     try:
         output = subprocess.check_output(['which', 'ufw'], stderr=subprocess.STDOUT)
