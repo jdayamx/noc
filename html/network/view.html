@@ -1,7 +1,17 @@
 {% extends 'main.html' %}
 
 {% block content %}
-<div class="container py-3 h-100">
+<div class="container mt-1">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/"><i class="fa fa-home" aria-hidden="true"></i></a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('network.network_list') }}">Network</a></li>
+            <li class="breadcrumb-item active" aria-current="page">View</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="container h-100">
     <div class="card rounded-3 text-black p-4">
         <h2>Network {{ row['ip_min'] }} - {{ row['ip_max'] }}</h2>
         <table border="1" cellpadding="5" cellspacing="0" class="table table-bordered">

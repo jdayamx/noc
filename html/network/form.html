@@ -1,18 +1,29 @@
 {% extends 'main.html' %}
 
 {% block content %}
-<div class="container py-3 h-100">
+
+<div class="container mt-1">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/"><i class="fa fa-home" aria-hidden="true"></i></a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('network.network_list') }}">Network</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ 'Edit' if row else 'Add' }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="container h-100">
     <div class="card rounded-3 text-black p-4">
         <h3 class="mb-4">{{ 'Edit' if row else 'Add' }} Network</h3>
         <form method="POST">
             <div class="mb-3">
-                <label for="ip_min" class="form-label">IP:</label>
-                <input type="text" class="form-control" id="ip_min" name="ip_min" value="{{ row['ip_min'] if row else '' }}" required>
+                <label for="ip_min" class="form-label">IP (min):</label>
+                <input type="text" class="form-control" id="ip_min" name="ip_min" value="{{ row['ip_min'] if row else '' }}" required placeholder="192.168.0.0">
             </div>
             
             <div class="mb-3">
-                <label for="max_ip" class="form-label">MAC:</label>
-                <input type="text" class="form-control" id="ip_max" name="ip_max" value="{{ row['ip_max'] if row else '' }}" required>
+                <label for="max_ip" class="form-label">IP (max):</label>
+                <input type="text" class="form-control" id="ip_max" name="ip_max" value="{{ row['ip_max'] if row else '' }}" required placeholder="192.168.0.255">
             </div>
 
             <div class="mb-3">
