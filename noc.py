@@ -686,7 +686,8 @@ def update_project():
         # Додаємо репозиторій до безпечних директорій, якщо ще не додано
         add_safe_directory(project_path)
 
-        # Перевіряємо, чи є нові зміни в репозиторії
+        subprocess.run(['git', 'reset', '--hard'], cwd=project_path, check=True, capture_output=True, text=True)
+
         result = subprocess.run(['git', 'fetch'], cwd=project_path, check=True, capture_output=True, text=True)
         if result.returncode != 0:
             return jsonify({'message': f'Помилка при git fetch: {result.stderr}'}), 500
