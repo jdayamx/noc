@@ -40,7 +40,6 @@ WantedBy=multi-user.target
     
         os.system('systemctl daemon-reload')
         os.system('systemctl enable noc.service')
-        os.system('systemctl start noc.service')
 
         flash('noc.service created successfully.', 'success')
     except Exception as e:
