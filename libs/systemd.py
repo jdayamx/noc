@@ -13,7 +13,7 @@ def create_noc_service():
         return redirect(request.referrer or '/')
 
     try:
-        project_dir = Path(__file__).resolve().parent
+        project_dir = Path(__file__).resolve().parent.parent
         script_path = project_dir / 'noc.py'
 
         content = f"""[Unit]
