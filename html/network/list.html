@@ -10,9 +10,9 @@
     <table class="table">
         <thead>
             <tr>
-                <th width="25%" colspan="2">IP Min</th>
+                <th width="5%"></th>
+                <th width="25%">IP Min</th>
                 <th width="20%">IP Max</th>
-                <th>UPDATED</th>
                 <th width="15%">Actions</th>
             </tr>
         </thead>
@@ -26,7 +26,6 @@
                     </td>
                     <td>{{ row['ip_min'] }}</td>
                     <td>{{ row['ip_max'] }}</td>
-                    <td>{{ row['updated_at'] }}</td>
                     <td>
                         <a href="{{ url_for('network.network_edit', id=row['id']) }}" class="btn btn-success btn-sm">
                             <i class="fas fa-edit"></i>
