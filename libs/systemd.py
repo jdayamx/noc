@@ -38,9 +38,6 @@ WantedBy=multi-user.target
 
         with open(service_path, 'w') as f:
             f.write(content)
-        result = subprocess.run(['pip3', 'install', '-r', 'requirements.txt'], cwd=project_dir, check=True, capture_output=True, text=True)
-        if result.returncode != 0:     
-            flash(f'Faild run pip install: {result.stderr}', 'danger')
     
         os.system('systemctl daemon-reload')
 
