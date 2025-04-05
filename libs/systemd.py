@@ -1,7 +1,6 @@
 from flask import Blueprint, flash, redirect, request
 from pathlib import Path
 import os
-import subprocess
 import sys
 
 python_path = sys.executable
