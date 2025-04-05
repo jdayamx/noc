@@ -14,6 +14,7 @@ else:
     import wmi
 import re
 from math import ceil
+from libs import firewall
 
 previous_traffic = {}
 
@@ -650,12 +651,13 @@ def dashboard():
     arp_table = get_arp_table()
     processes = get_processes()
     usb_devices = get_usb_devices()
+    firewalls = firewall.check_firewall()
     
     return render_template('dashboard.html', username=session['username'], 
                            cpu_info=cpu_info, disk_info=disk_info, 
                            ram_info=ram_info, network_info=network_info, 
                            arp_table=arp_table, processes=processes,
-                           usb_devices=usb_devices)
+                           usb_devices=usb_devices, firewalls=firewalls)
 
 def get_project_path():
     return os.path.dirname(os.path.abspath(__file__))
