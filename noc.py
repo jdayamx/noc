@@ -16,11 +16,14 @@ import re
 from math import ceil
 from libs import firewall
 from libs.network import network_bp
+from libs.systemd import systemd_bp
 
 previous_traffic = {}
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
+app.register_blueprint(systemd_bp)
+
 app.secret_key = 'your_secret_key'
 
 DB_FOLDER = 'db'
