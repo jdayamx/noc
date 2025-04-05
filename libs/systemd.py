@@ -2,7 +2,9 @@ from flask import Blueprint, flash, redirect, request
 from pathlib import Path
 import os
 import subprocess
+import sys
 
+python_path = sys.executable
 systemd_bp = Blueprint('systemd', __name__)
 
 @systemd_bp.route('/create_noc_service')
@@ -22,7 +24,7 @@ Description=NOC Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 {script_path}
+ExecStart={python_path} {script_path}
 WorkingDirectory={project_dir}
 Restart=always
 User=root
