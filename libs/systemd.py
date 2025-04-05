@@ -1,11 +1,12 @@
 from flask import Blueprint, flash, redirect, request
 from pathlib import Path
 import os
+import subprocess
 
 systemd_bp = Blueprint('systemd', __name__)
 
 @systemd_bp.route('/create_noc_service')
-def create_noc_service():
+def create_noc_service():   
     service_path = '/etc/systemd/system/noc.service'
 
     if Path(service_path).exists():
@@ -35,6 +36,10 @@ WantedBy=multi-user.target
 
         with open(service_path, 'w') as f:
             f.write(content)
+        result = subprocess.run(['pip3', 'install', '-r', 'requirements.txt'], cwd=project_dir, check=True, capture_output=True, text=True)
+        if result.returncode != 0:     
+            flash(f'Faild run pip install: {result.stderr}', 'danger')
+    
         os.system('systemctl daemon-reload')
 
         flash('noc.service created successfully.', 'success')
