@@ -5,6 +5,7 @@ import subprocess
 import os
 import re
 import sqlite3
+from datetime import datetime
 
 network_bp = Blueprint('network', __name__)
 
@@ -107,10 +108,15 @@ def network_view(id):
         ip_min = ip_address(row['ip_min'])
         ip_max = ip_address(row['ip_max'])
 
-        cursor.execute("SELECT * FROM ip WHERE ip >= ? AND ip <= ?", (row['ip_min'], row['ip_max']))
+        cursor.execute("SELECT ip, mac FROM ip WHERE ip >= ? AND ip <= ?", (row['ip_min'], row['ip_max']))
         db_rows = cursor.fetchall()
         db_ips = {row['ip'] for row in db_rows}
         db_dict = {row['ip']: row['mac'] for row in db_rows}
+
+        cursor.execute("SELECT ip.ip, GROUP_CONCAT(service.number, ',') AS ports FROM ip LEFT JOIN service ON service.ip_id = ip.id GROUP BY ip.ip;")
+        db_rows_p = cursor.fetchall()
+        db_ports = {row['ip']: row['ports'] for row in db_rows_p}
+
     arp_table = get_arp_table()
     arp_ips = {row['ip'] for row in arp_table}
     ip_list = []
@@ -128,7 +134,8 @@ def network_view(id):
             'ip': str(current_ip),
             'number': ip_last_digit,
             'color': color,
-            'mac': db_dict.get(str(current_ip), '')
+            'mac': db_dict.get(str(current_ip), ''),
+            'ports': db_ports.get(str(current_ip), '')
         }
         ip_list.append(ip_entry)
 
@@ -168,3 +175,45 @@ def ping():
 #     output = subprocess.check_output(['ip', 'neigh', 'show', ip]).decode()
 #     match = re.search(r'(?P<mac>([0-9a-f]{2}:){5}[0-9a-f]{2})', output, re.I)
 #     return match.group('mac') if match else None
+
+@network_bp.route('/network/ports/<ip>')
+def ports(ip):
+    try:
+        # Запускаємо nmap на основні TCP-порти
+        result = subprocess.run(['nmap', '-p-', '--min-rate', '9999', '-T4', ip], capture_output=True, text=True, timeout=15)
+        output = result.stdout
+
+        # Парсимо відкриті порти
+        open_ports = []
+        for line in output.splitlines():
+            if '/tcp' in line and 'open' in line:
+                port = int(line.split('/')[0])
+                open_ports.append(port)
+
+        # Отримуємо id IP-адреси з бази
+        conn = sqlite3.connect(DATABASE_NET)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM ip WHERE ip = ?", (ip,))
+        ip_row = cursor.fetchone()
+        if not ip_row:
+            return jsonify({'error': 'IP not found'}), 404
+        ip_id = ip_row[0]
+
+        now = datetime.utcnow().isoformat()
+
+        # Видаляємо старі записи
+        cursor.execute("DELETE FROM service WHERE ip_id = ?", (ip_id,))
+
+        # Додаємо нові
+        for port in open_ports:
+            cursor.execute("""
+                INSERT INTO service (ip_id, number, updated_at)
+                VALUES (?, ?, ?)
+            """, (ip_id, port, now))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ip': ip, 'ports': open_ports})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

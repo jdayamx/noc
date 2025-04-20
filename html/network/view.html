@@ -20,7 +20,7 @@
                     {% for ip_entry in ip_list[i:i+16] %}
                         <td class="ip-cell" style="background-color: {{ ip_entry.color }};text-align:center;" 
                         {% if ip_entry.mac %}
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="{{ ip_entry.ip }}<br>{{ ip_entry.mac }}"
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="{{ ip_entry.ip }}<br>{{ ip_entry.mac }}{% if ip_entry.ports %}<br>Ports: {{ ip_entry.ports }}{% endif %}"
                         {% endif %}
                          data-ip="{{ ip_entry.ip }}"
                         >
@@ -35,6 +35,7 @@
 
 <div id="context-menu" class="dropdown-menu show" style="display:none; position:absolute;">
     <button class="dropdown-item" id="ping-action">Ping</button>
+    <button class="dropdown-item" id="scan-action">Scan ports</button>
 </div>
 
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
@@ -62,6 +63,14 @@
         document.addEventListener('click', (e) => {
             if (!contextMenu.contains(e.target)) {
                 contextMenu.style.display = 'none';
+            }
+        });
+
+        document.getElementById('scan-action').addEventListener('click', function(e) {
+            e.preventDefault();
+            contextMenu.style.display = 'none';
+            if (currentIP) {
+                scanNmap(currentIP)
             }
         });
     
@@ -93,6 +102,21 @@
         });
     });
 
+    function scanNmap(ip) {
+        fetch(`/network/ports/${ip}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.ports) {
+                    showToast(`${ip} → Open ports: ${data.ports.join(', ')}`);
+                } else if (data.error) {
+                    showToast(`${ip} → Error: ${data.error}`);
+                }
+            })
+            .catch(err => {
+                showToast(`${ip} → Request failed`);
+            });
+    }
+
     function showToast(message) {
     const toastElement = document.createElement('div');
     toastElement.classList.add('toast', 'align-items-center', 'text-white', 'bg-primary', 'border-0');
@@ -115,7 +139,7 @@
     setTimeout(() => {
         toast.hide();
         toastElement.remove();
-    }, 5000);
+    }, 10000);
 }
 
 </script>
