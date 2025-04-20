@@ -106,8 +106,10 @@ def network_view(id):
         ip_min = ip_address(row['ip_min'])
         ip_max = ip_address(row['ip_max'])
 
-        cursor.execute("SELECT ip FROM ip WHERE ip >= ? AND ip <= ?", (row['ip_min'], row['ip_max']))
-        db_ips = {row['ip'] for row in cursor.fetchall()}
+        cursor.execute("SELECT * FROM ip WHERE ip >= ? AND ip <= ?", (row['ip_min'], row['ip_max']))
+        db_rows = cursor.fetchall()
+        db_ips = {row['ip'] for row in db_rows}
+        db_dict = {row['ip']: row['mac'] for row in db_rows}
     arp_table = get_arp_table()
     arp_ips = {row['ip'] for row in arp_table}
     ip_list = []
@@ -125,6 +127,7 @@ def network_view(id):
             'ip': str(current_ip),
             'number': ip_last_digit,
             'color': color,
+            'mac': db_dict.get(str(current_ip), '')
         }
         ip_list.append(ip_entry)
 
