@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from math import ceil
 from ipaddress import ip_address
+import subprocess
 import os
 import re
 import sqlite3
@@ -142,3 +143,28 @@ def network_delete(id):
 
     flash(f'Network deleted successfully!', 'success')
     return redirect(url_for('network.network_list'))
+
+@network_bp.route('/network/ping', methods=['POST'])
+def ping():
+    data = request.get_json()
+    ip = data.get('ip')
+    if not ip:
+        return jsonify({'error': 'No IP provided'}), 400
+
+    try:
+        # ping -c 1 -w 1 для Linux/macOS, для Windows буде інший
+        result = subprocess.run(['ping', '-c', '1', '-w', '1', ip],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+        online = result.returncode == 0
+        # mac = get_mac_from_ip(ip)
+        # if mac:
+        #     subprocess.run(['ip', 'neigh', 'replace', ip, 'lladdr', mac])
+        return jsonify({'status': 'online' if online else 'offline'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+# def get_mac_from_ip(ip):
+#     output = subprocess.check_output(['ip', 'neigh', 'show', ip]).decode()
+#     match = re.search(r'(?P<mac>([0-9a-f]{2}:){5}[0-9a-f]{2})', output, re.I)
+#     return match.group('mac') if match else None

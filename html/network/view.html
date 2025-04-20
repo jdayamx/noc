@@ -18,7 +18,12 @@
             {% for i in range(0, ip_list|length, 16) %}
                 <tr>
                     {% for ip_entry in ip_list[i:i+16] %}
-                        <td style="background-color: {{ ip_entry.color }};text-align:center;" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="{{ ip_entry.ip }}<br>{{ ip_entry.mac }}">
+                        <td class="ip-cell" style="background-color: {{ ip_entry.color }};text-align:center;" 
+                        {% if ip_entry.mac %}
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="{{ ip_entry.ip }}<br>{{ ip_entry.mac }}"
+                        {% endif %}
+                         data-ip="{{ ip_entry.ip }}"
+                        >
                             {{ ip_entry.number }} 
                         </td>
                     {% endfor %}
@@ -27,4 +32,91 @@
         </table>
     </div>
 </div>
+
+<div id="context-menu" class="dropdown-menu show" style="display:none; position:absolute;">
+    <button class="dropdown-item" id="ping-action">Ping</button>
+</div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+    <div id="pingToastContainer"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const contextMenu = document.getElementById('context-menu');
+        let currentIP = null;
+    
+        document.querySelectorAll('.ip-cell').forEach(cell => {
+            cell.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                currentIP = this.getAttribute('data-ip');
+    
+                contextMenu.style.display = 'block';
+                contextMenu.style.top = `${e.pageY}px`;
+                contextMenu.style.left = `${e.pageX}px`;
+            });
+        });
+    
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+            }
+        });
+    
+        document.getElementById('ping-action').addEventListener('click', function(e) {
+            e.preventDefault();
+            contextMenu.style.display = 'none';
+            if (currentIP) {
+                fetch('{{ url_for('network.ping') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ip: currentIP })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'online') {
+                        showToast(`💚 ${currentIP} online`);
+                    } else if (data.status === 'offline') {
+                        showToast(`💔 ${currentIP} offline`);
+                    } else {
+                        showToast(`⚠️ Ping error: ${data.error}`);
+                    }
+                })
+                .catch(err => {
+                    showToast(`❌ Ping failed: ${err}`);
+                });
+            }
+        });
+    });
+
+    function showToast(message) {
+    const toastElement = document.createElement('div');
+    toastElement.classList.add('toast', 'align-items-center', 'text-white', 'bg-primary', 'border-0');
+    toastElement.setAttribute('role', 'alert');
+    toastElement.innerHTML = `
+        <div class="d-flex mb-1">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+
+    const container = document.getElementById('pingToastContainer');
+    container.insertBefore(toastElement, container.firstChild); // додавання зверху
+
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+
+    setTimeout(() => {
+        toast.hide();
+        toastElement.remove();
+    }, 5000);
+}
+
+</script>
 {% endblock %}
