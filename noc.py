@@ -728,10 +728,27 @@ def reset_users():
 def update_arp_table():
     arp_entries = get_arp_table()
     with sqlite3.connect(DATABASE_NET) as conn:
+        cursor = conn.cursor()
+        # Спочатку всім ставимо offline
+        cursor.execute("UPDATE ip SET status = 'offline'")
+        # Потім оновлюємо або вставляємо активні (online)
         for entry in arp_entries:
-            conn.execute('''INSERT OR REPLACE INTO ip (ip, mac, status, updated_at) 
-                            VALUES (?, ?, ?, datetime('now'))''',
-                         (entry["ip"], entry["mac"], 'Active'))
+            # Оновити, якщо існує
+            cursor.execute('''
+                UPDATE ip
+                SET mac = ?, status = 'online', updated_at = datetime('now')
+                WHERE ip = ?
+            ''', (entry["mac"], entry["ip"]))
+
+            # Вставити, якщо ще нема такого IP
+            cursor.execute('''
+                INSERT INTO ip (ip, mac, status, updated_at)
+                SELECT ?, ?, 'online', datetime('now')
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM ip WHERE ip = ?
+                )
+            ''', (entry["ip"], entry["mac"], entry["ip"]))
+
         conn.commit()
 
 def start_scheduler():
@@ -748,6 +765,6 @@ def start_scheduler():
 if __name__ == '__main__':
     init_db()
     add_default_users()
-    if not os.environ.get("WERKZEUG_RUN_MAIN"):
-        start_scheduler()
+    #if not os.environ.get("WERKZEUG_RUN_MAIN"):
+    start_scheduler()
     app.run(host='0.0.0.0', port=1983, debug=True)
