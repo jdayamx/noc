@@ -180,7 +180,8 @@ def ping():
 def ports(ip):
     try:
         # Запускаємо nmap на основні TCP-порти
-        result = subprocess.run(['nmap', '-p-', '--min-rate', '9999', '-T4', ip], capture_output=True, text=True, timeout=15)
+        # nmap -p- --min-rate 9999 -T4 --host-timeout 60s 10.1.1.162
+        result = subprocess.run(['nmap', '-p-', '--min-rate', '9999', '-T4', '--host-timeout', '60s', ip], capture_output=True, text=True, timeout=60)
         output = result.stdout
 
         # Парсимо відкриті порти
