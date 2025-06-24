@@ -164,10 +164,36 @@ def ping():
                                 stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL)
         online = result.returncode == 0
+        status = 'online' if online else 'offline'
+        now = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
+
+        conn = sqlite3.connect(DATABASE_NET)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM ip WHERE ip = ?", (ip,))
+        row = cursor.fetchone()
+
+        if row is None:
+            # Додаємо новий запис
+            cursor.execute("""
+                INSERT INTO ip (ip, status, updated_at)
+                VALUES (?, ?, ?)
+            """, (ip, status, now))
+        else:
+            # Оновлюємо існуючий
+            cursor.execute("""
+                UPDATE ip
+                SET status = ?, updated_at = ?
+                WHERE ip = ?
+            """, (status, now, ip))
+
+        conn.commit()
+        conn.close()
+
         # mac = get_mac_from_ip(ip)
         # if mac:
         #     subprocess.run(['ip', 'neigh', 'replace', ip, 'lladdr', mac])
-        return jsonify({'status': 'online' if online else 'offline'})
+        return jsonify({'status': status})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
