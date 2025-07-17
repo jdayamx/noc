@@ -3,6 +3,7 @@ import subprocess
 from flask import  jsonify, flash, Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
+from functools import wraps
 import sqlite3
 import os
 import time
@@ -84,6 +85,14 @@ def init_db():
                             FOREIGN KEY (device_id) REFERENCES device (id)
                         )''')
          conn_net.commit()
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def add_default_users():
     users = [
@@ -403,11 +412,12 @@ def get_processes():
     return sorted(processes, key=lambda x: (x["cpu_usage"], x["ram_usage"]), reverse=True)
 
 def scan_bluetooth_devices():
-    try:
-        nearby_devices = bluetooth.discover_devices(duration=5, lookup_names=True)
-        return nearby_devices if nearby_devices else []
-    except Exception as e:
-        return str(e)
+    #try:
+        #nearby_devices = bluetooth.discover_devices(duration=5, lookup_names=True)
+        #return nearby_devices if nearby_devices else []
+    #except Exception as e:
+    #    return str(e)
+    return []
 
 @app.route('/get_dashboard_data')
 def get_dashboard_data():
@@ -426,6 +436,7 @@ def get_dashboard_data():
     })
 
 @app.route('/lan')
+@login_required
 def lan():
     network_info = get_network_info()
     arp_table = get_arp_table()
@@ -460,6 +471,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/user/list')
+@login_required
 def user_list():
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
@@ -469,6 +481,7 @@ def user_list():
     return render_template('user_list.html', users=users)
 
 @app.route('/ip/list')
+@login_required
 def ip_list():
     # Кількість елементів на сторінці
     per_page = 15
@@ -509,6 +522,7 @@ def is_valid_mac(mac):
     return bool(re.match(pattern, mac))
 
 @app.route('/ip/add', methods=['GET', 'POST'])
+@login_required
 def ip_add():
     if request.method == 'POST':
         new_ip = request.form['ip']
@@ -533,6 +547,7 @@ def ip_add():
 
     return render_template('ip_edit.html')
 @app.route('/ip/edit/<id>', methods=['GET', 'POST'])
+@login_required
 def ip_edit(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.row_factory = sqlite3.Row
@@ -563,6 +578,7 @@ def ip_edit(id):
         return render_template('ip_edit.html', ip=ip, request=request)
 
 @app.route('/ip/delete/<id>', methods=['GET'])
+@login_required
 def ip_delete(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.execute('DELETE FROM ip WHERE id = ?', (id,))
@@ -572,6 +588,7 @@ def ip_delete(id):
     return redirect(url_for('ip_list'))
 
 @app.route('/user/edit/<username>', methods=['GET', 'POST'])
+@login_required
 def edit_user(username):
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
@@ -612,6 +629,7 @@ def edit_user(username):
 
         return render_template('edit_user.html', user=user, request=request)
 @app.route('/user/add', methods=['GET', 'POST'])
+@login_required
 def user_add():
     if request.method == 'POST':
         username = request.form['username']
@@ -633,6 +651,7 @@ def user_add():
     return render_template('user_add.html')
 
 @app.route('/user/delete/<username>', methods=['GET'])
+@login_required
 def delete_user(username):
     if username == 'admin':
         flash('Cannot delete the admin user.', 'danger')
@@ -646,9 +665,8 @@ def delete_user(username):
     return redirect(url_for('user_list'))  # Переходимо до списку користувачів
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    if 'username' not in session:
-        return redirect(url_for('login'))
     disk_info = get_disk_info()
     cpu_info = get_cpu_info()
     ram_info = get_ram_info()
@@ -681,6 +699,7 @@ def add_safe_directory(project_path):
         raise Exception(f"Помилка при перевірці safe.directory: {e.stderr}")
 
 @app.route('/update_project', methods=['POST'])
+@login_required
 def update_project():
     try:
         # Визначаємо шлях до каталогу проекту

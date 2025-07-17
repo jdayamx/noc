@@ -1,12 +1,22 @@
-from flask import Blueprint, flash, redirect, request
+from flask import Blueprint, flash, redirect, request, session, url_for
 from pathlib import Path
 import os
 import sys
+from functools import wraps
 
 python_path = sys.executable
 systemd_bp = Blueprint('systemd', __name__)
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @systemd_bp.route('/create_noc_service')
+@login_required
 def create_noc_service():   
     service_path = '/etc/systemd/system/noc.service'
 
