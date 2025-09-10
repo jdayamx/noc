@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 import sqlite3
+import json
 import os
 import time
 import threading
@@ -31,6 +32,8 @@ app.secret_key = 'your_secret_key'
 DB_FOLDER = 'db'
 DATABASE = os.path.join(DB_FOLDER, 'users.db')
 DATABASE_NET = os.path.join(DB_FOLDER, 'network.db')
+
+LOG_FILE = "/var/log/nginx/access.json"
 
 # Create the db directory if it doesn't exist
 if not os.path.exists(DB_FOLDER):
@@ -726,6 +729,68 @@ def add_safe_directory(project_path):
             subprocess.run(['git', 'config', '--global', '--add', 'safe.directory', project_path], check=True)
     except subprocess.CalledProcessError as e:
         raise Exception(f"Помилка при перевірці safe.directory: {e.stderr}")
+
+@app.route("/logs")
+@login_required
+def logs():
+    if not os.path.exists(LOG_FILE):
+        logs = []
+    else:
+        logs = []
+        # Відкриваємо файл з ігноруванням не-UTF8 символів
+        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    logs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    # Пропускаємо рядки, які не валідні JSON
+                    continue
+
+    # ----------------- унікальні URL -----------------
+    url_counter = Counter()
+    for l in logs:
+        req = l.get("request", "")
+        url_counter[req] += 1
+
+    # ----------------- унікальні IP -----------------
+    ip_counter = Counter()
+    for l in logs:
+        ip = l.get("remote_addr", "")
+        ip_counter[ip] += 1
+
+    # ----------------- унікальні User-Agent -----------------
+    ua_counter = Counter()
+    for l in logs:
+        ua = l.get("http_user_agent", "")
+        ua_counter[ua] += 1
+
+    # ----------------- помилки -----------------
+    errors = []
+    for l in logs:
+        try:
+            status = int(l.get("status", 0))
+        except ValueError:
+            continue
+        if status >= 400:
+            errors.append({
+                "time": l.get("time_local"),
+                "status": status,
+                "request": l.get("request"),
+                "ip": l.get("remote_addr"),
+            })
+
+    return render_template(
+        "nginx/logs.html",
+        logs=logs,
+        urls=url_counter.most_common(),
+        ips=ip_counter.most_common(),
+        user_agents=ua_counter.most_common(),
+        errors=errors
+    )
+
 
 @app.route('/update_project', methods=['POST'])
 @login_required

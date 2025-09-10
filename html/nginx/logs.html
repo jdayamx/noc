@@ -1,0 +1,264 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <h2>NOC Logs</h2>
+
+        <ul class="nav nav-tabs" id="logTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button">All Logs</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="urls-tab" data-bs-toggle="tab" data-bs-target="#urls" type="button">Unique URLs</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="ips-tab" data-bs-toggle="tab" data-bs-target="#ips" type="button">Unique IPs</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="ua-tab" data-bs-toggle="tab" data-bs-target="#ua" type="button">User Agents</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="errors-tab" data-bs-toggle="tab" data-bs-target="#errors" type="button">Errors</button>
+            </li>
+        </ul>
+
+        <div class="tab-content mt-3">
+            <!-- All Logs -->
+            <div class="tab-pane fade show active" id="all">
+                <table class="table table-sm table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>IP</th>
+                            <th>Host</th>
+                            <th>Request</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody"></tbody>
+                </table>
+                <nav>
+                    <ul class="pagination justify-content-center flex-wrap" id="pagination-logs"></ul>
+                </nav>
+            </div>
+
+            <!-- Unique URLs -->
+            <div class="tab-pane fade" id="urls">
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>URL</th><th>Count</th></tr></thead>
+                    <tbody id="urlsTableBody">
+                    {% for url, count in urls %}
+                        <tr><td style="word-break: break-word;">{{ url }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav>
+                    <ul class="pagination justify-content-center flex-wrap" id="pagination-urls"></ul>
+                </nav>
+            </div>
+
+            <!-- Unique IPs -->
+            <div class="tab-pane fade" id="ips">
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>IP</th><th>Count</th></tr></thead>
+                    <tbody id="ipsTableBody">
+                    {% for ip, count in ips %}
+                        <tr><td>{{ ip }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav>
+                    <ul class="pagination justify-content-center flex-wrap" id="pagination-ips"></ul>
+                </nav>
+            </div>
+
+            <!-- User Agents -->
+            <div class="tab-pane fade" id="ua">
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>User Agent</th><th>Count</th></tr></thead>
+                    <tbody id="uaTableBody">
+                    {% for ua, count in user_agents %}
+                        <tr><td style="word-break: break-word;">{{ ua }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav>
+                    <ul class="pagination justify-content-center flex-wrap" id="pagination-ua"></ul>
+                </nav>
+            </div>
+
+            <!-- Errors -->
+            <div class="tab-pane fade" id="errors">
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>Time</th><th>IP</th><th>Request</th><th>Status</th></tr></thead>
+                    <tbody id="errorsTableBody">
+                    {% for e in errors %}
+                        {% set cls = "table-warning" if e.status == 500 else "table-danger" if e.status in [403,404] else "" %}
+                        <tr class="{{ cls }}">
+                            <td>{{ e.time }}</td>
+                            <td>{{ e.ip }}</td>
+                            <td style="word-break: break-word;">{{ e.request }}</td>
+                            <td>{{ e.status }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav>
+                    <ul class="pagination justify-content-center flex-wrap" id="pagination-errors"></ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    td { word-break: break-word; }
+</style>
+
+<script>
+    // Дані з бекенду
+    const logs = {{ logs|tojson }};
+    const urls = {{ urls|tojson }};
+    const ips = {{ ips|tojson }};
+    const user_agents = {{ user_agents|tojson }};
+    const errors = {{ errors|tojson }};
+    const rowsPerPage = 50;
+
+    // Універсальна функція пагінації для однієї вкладки
+    function paginate(data, tbodyId, paginationId, renderRow) {
+        let currentPage = 1;
+
+        function renderTable(page) {
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = "";
+            const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
+            if (data.length === 0) {
+                // нічого не рендерити
+                return;
+            }
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = data.slice(start, end);
+            pageData.forEach(d => {
+                const rowEl = renderRow(d);
+                // renderRow повинен повертати DOM-елемент <tr>
+                tbody.appendChild(rowEl);
+            });
+            renderPagination(page);
+        }
+
+        function renderPagination(page) {
+            const pagination = document.getElementById(paginationId);
+            pagination.innerHTML = "";
+            const totalPages = Math.ceil(data.length / rowsPerPage);
+
+            if (totalPages <= 1) {
+                // ховаємо пагінацію (залишаємо порожньою)
+                return;
+            }
+
+            // helper: створити кнопку
+            function addButton(label, targetPage, disabled=false, active=false) {
+                const li = document.createElement('li');
+                li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = label;
+                a.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (!disabled) {
+                        currentPage = Math.max(1, Math.min(totalPages, targetPage));
+                        renderTable(currentPage);
+                    }
+                });
+                li.appendChild(a);
+                pagination.appendChild(li);
+            }
+
+            // << and <
+            addButton('«', 1, page === 1);
+            addButton('‹', Math.max(1, page - 1), page === 1);
+
+            // window of pages
+            let startPage = Math.max(1, page - 2);
+            let endPage = Math.min(totalPages, page + 2);
+
+            if (startPage > 1) {
+                addButton('1', 1);
+                if (startPage > 2) {
+                    const dots = document.createElement('li');
+                    dots.className = 'page-item disabled';
+                    dots.innerHTML = '<span class="page-link">…</span>';
+                    pagination.appendChild(dots);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                addButton(i, i, false, i === page);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const dots2 = document.createElement('li');
+                    dots2.className = 'page-item disabled';
+                    dots2.innerHTML = '<span class="page-link">…</span>';
+                    pagination.appendChild(dots2);
+                }
+                addButton(totalPages, totalPages);
+            }
+
+            // > and >>
+            addButton('›', Math.min(totalPages, page + 1), page === totalPages);
+            addButton('»', totalPages, page === totalPages);
+        }
+
+        // початковий рендер
+        if (data.length > 0) renderTable(currentPage);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // logs: кожен елемент — об'єкт
+        paginate(logs, "logsTableBody", "pagination-logs", l => {
+            const tr = document.createElement("tr");
+            const status = Number(l.status) || 0;
+            if (status === 500) tr.className = "table-warning";
+            else if ([403,404].includes(status)) tr.className = "table-danger";
+            tr.innerHTML = `<td>${l.time_local||''}</td><td>${l.remote_addr||''}</td><td>${l.host||''}</td><td style="word-break: break-word;">${l.request||''}</td><td>${l.status||''}</td>`;
+            return tr;
+        });
+
+        // urls: кожен елемент — [url, count]
+        paginate(urls, "urlsTableBody", "pagination-urls", u => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td style="word-break: break-word;">${u[0] || ''}</td><td>${u[1] || 0}</td>`;
+            return tr;
+        });
+
+        // ips: [ip, count]
+        paginate(ips, "ipsTableBody", "pagination-ips", ip => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${ip[0] || ''}</td><td>${ip[1] || 0}</td>`;
+            return tr;
+        });
+
+        // user_agents: [ua, count]
+        paginate(user_agents, "uaTableBody", "pagination-ua", ua => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td style="word-break: break-word;">${ua[0] || ''}</td><td>${ua[1] || 0}</td>`;
+            return tr;
+        });
+
+        // errors: об'єкт з полями time, ip, request, status
+        paginate(errors, "errorsTableBody", "pagination-errors", e => {
+            const tr = document.createElement("tr");
+            const status = Number(e.status) || 0;
+            if (status === 500) tr.className = "table-warning";
+            else if ([403,404].includes(status)) tr.className = "table-danger";
+            tr.innerHTML = `<td>${e.time || ''}</td><td>${e.ip || ''}</td><td style="word-break: break-word;">${e.request || ''}</td><td>${e.status || ''}</td>`;
+            return tr;
+        });
+    });
+</script>
+{% endblock %}
