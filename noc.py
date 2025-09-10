@@ -746,8 +746,10 @@ def logs():
                 try:
                     logs.append(json.loads(line))
                 except json.JSONDecodeError:
-                    # Пропускаємо рядки, які не валідні JSON
                     continue
+
+    # перевертаємо масив, щоб останні записи були першими
+    logs.reverse()
 
     # ----------------- унікальні URL -----------------
     url_counter = Counter()

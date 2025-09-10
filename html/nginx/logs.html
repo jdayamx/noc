@@ -291,40 +291,50 @@
     }
 
     function renderChartMinute(canvasId, grouped) {
-        const ctx = document.getElementById(canvasId).getContext("2d");
+    const ctx = document.getElementById(canvasId).getContext("2d");
 
-        // збираємо всі мітки часу
-        const allTimes = new Set();
-        Object.values(grouped).forEach(obj => Object.keys(obj).forEach(t => allTimes.add(t)));
-        const labels = Array.from(allTimes).sort();
+    // збираємо всі мітки часу
+    const allTimes = new Set();
+    Object.values(grouped).forEach(obj => Object.keys(obj).forEach(t => allTimes.add(t)));
+    const labels = Array.from(allTimes).sort();
 
-        const datasets = Object.entries(grouped).map(([key,data]) => ({
-            label: key,
-            data: labels.map(t => data[t] || 0),
-            borderColor: `hsl(${Math.floor(Math.random()*360)},70%,50%)`,
-            fill: false,
-            tension: 0.3
-        }));
-
-        new Chart(ctx, {
-            type: 'line',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: true } },
-                scales: {
-                    x: { title: { display: true, text: "Time (per minute)" } },
-                    y: { title: { display: true, text: "Requests" }, beginAtZero: true }
-                }
-            }
-        });
+    // генератор стабільних кольорів для кожного ключа
+    function colorForKey(key) {
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+        const h = hash % 360;
+        return `hsl(${h},70%,50%)`;
     }
 
-    const ipGrouped = groupLogsByFieldMinute(logs, "remote_addr", 50);
-    renderChartMinute("chart-ip", ipGrouped);
+    const datasets = Object.entries(grouped).map(([key, data]) => ({
+        label: key,
+        data: labels.map(t => data[t] || 0),
+        borderColor: colorForKey(key),
+        fill: false,
+        tension: 0.3,
+    }));
 
-    const uaGrouped = groupLogsByFieldMinute(logs, "http_user_agent", 50);
-    renderChartMinute("chart-ua", uaGrouped);
+    new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                x: { title: { display: true, text: "Time (per minute)" } },
+                y: { title: { display: true, text: "Requests" }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+// групуємо і рендеримо з топ-N
+const ipGrouped = groupLogsByFieldMinute(logs, "remote_addr", 50, 10);
+renderChartMinute("chart-ip", ipGrouped);
+
+const uaGrouped = groupLogsByFieldMinute(logs, "http_user_agent", 50, 10);
+renderChartMinute("chart-ua", uaGrouped);
+
 
     });
 </script>
