@@ -18,6 +18,7 @@ from math import ceil
 from libs import firewall
 from libs.network import network_bp
 from libs.systemd import systemd_bp
+from collections import Counter
 
 previous_traffic = {}
 
@@ -365,6 +366,32 @@ def get_network_connections():
     
     return connections
 
+def get_summarize_connections():
+    from collections import Counter
+
+    conns = get_network_connections()
+    counter = Counter()
+
+    for c in conns:
+        remote_ip = c["remote_ip"]
+
+        # Пропускаємо локальні підключення
+        if remote_ip.startswith("127.") or remote_ip == "::1":
+            continue
+
+        key = (remote_ip, c["local_port"])
+        counter[key] += 1
+
+    result = [
+        {"ip": ip, "port": port, "connections": count}
+        for (ip, port), count in counter.items()
+    ]
+
+    # Сортування за кількістю підключень (спадання)
+    result.sort(key=lambda x: x["connections"], reverse=True)
+
+    return result
+
 def get_usb_devices():
     devices = []
     if platform.system() == "Linux":
@@ -441,8 +468,10 @@ def lan():
     network_info = get_network_info()
     arp_table = get_arp_table()
     network_connections = get_network_connections()
+    summarize_connections = get_summarize_connections()
     return render_template('lan.html', network_info=network_info, 
-                           arp_table=arp_table, network_connections=network_connections)
+                           arp_table=arp_table, network_connections=network_connections,
+                           summarize_connections=summarize_connections)
 
 @app.route('/', methods=['GET'])
 def home():

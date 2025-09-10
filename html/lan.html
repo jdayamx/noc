@@ -50,6 +50,26 @@
         </tbody>
     </table>
 
+    <h3>Summary Network Connections</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Port</th>
+                <th>Connections</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sc in summarize_connections %}
+            <tr>
+                <td>{{ sc.ip }}</td>
+                <td>{{ sc.port }}</td>
+                <td>{{ sc.connections }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
     <h3>Active Network Connections</h3>
     <table class="table table-bordered">
         <thead>
