@@ -742,18 +742,22 @@ def update_project():
         result = subprocess.run(['git', 'fetch'], cwd=project_path, check=True, capture_output=True, text=True)
         if result.returncode != 0:
             return jsonify({'message': f'Помилка при git fetch: {result.stderr}'}), 500
-        
+
         # Оновлюємо проект
         result = subprocess.run(['git', 'pull'], cwd=project_path, check=True, capture_output=True, text=True)
         if result.returncode != 0:
             return jsonify({'message': f'Помилка при git pull: {result.stderr}'}), 500
-        
+
         # Оновлюємо залежності
         result = subprocess.run(['pip', 'install', '-r', 'requirements.txt'], cwd=project_path, check=True, capture_output=True, text=True)
         if result.returncode != 0:
             return jsonify({'message': f'Помилка при pip install: {result.stderr}'}), 500
 
-        return jsonify({'message': 'Оновлення успішне!'}), 200
+        # Якщо все успішно — рестартимо noc
+        subprocess.run(['service', 'noc', 'restart'], check=True, capture_output=True, text=True)
+
+        return jsonify({'message': 'Оновлення успішне! NOC перезапущено ✅'}), 200
+
     except subprocess.CalledProcessError as e:
         return jsonify({'message': f'Помилка при оновленні: {e.stderr}'}), 500
     except Exception as e:
