@@ -754,7 +754,8 @@ def update_project():
             return jsonify({'message': f'Помилка при pip install: {result.stderr}'}), 500
 
         # Якщо все успішно — рестартимо noc
-        subprocess.run(['service', 'noc', 'restart'], check=True, capture_output=True, text=True)
+        subprocess.run(['systemctl', 'stop', 'noc.service'], check=True)
+        subprocess.run(['systemctl', 'start', 'noc.service'], check=True)
 
         return jsonify({'message': 'Оновлення успішне! NOC перезапущено ✅'}), 200
 
