@@ -51,7 +51,7 @@
     </table>
 
     <h3>Summary Network Connections</h3>
-    <table class="table table-bordered">
+    <table class="table table-bordered" id="connections-table">
         <thead>
             <tr>
                 <th>IP Address</th>
@@ -69,6 +69,50 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <table class="table table-bordered" id="totals-table">
+        <thead>
+            <tr>
+                <th>Port</th>
+                <th>Total Connections</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Totals будуть додані JS -->
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><strong>Grand Total</strong></td>
+                <td id="grand-total"></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const rows = document.querySelectorAll('#connections-table tbody tr');
+        const portTotals = {};
+        let grandTotal = 0;
+
+        rows.forEach(row => {
+            const port = row.cells[1].innerText;
+            const connections = parseInt(row.cells[2].innerText, 10);
+
+            portTotals[port] = (portTotals[port] || 0) + connections;
+            grandTotal += connections;
+        });
+
+        const totalsTbody = document.querySelector('#totals-table tbody');
+
+        for (const [port, total] of Object.entries(portTotals)) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${port}</td><td>${total}</td>`;
+            totalsTbody.appendChild(tr);
+        }
+
+        document.getElementById('grand-total').innerText = grandTotal;
+    });
+    </script>
 
     <h3>Active Network Connections</h3>
     <table class="table table-bordered">
