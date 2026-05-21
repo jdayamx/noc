@@ -17,6 +17,9 @@ if platform.system() == "Linux":
 else:
     import wmi
 import re
+from datetime import datetime
+import glob
+import gzip
 from math import ceil
 from libs import firewall
 from libs.network import network_bp
@@ -25,7 +28,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.7"
+APP_VERSION = "1.0.0.10"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -837,6 +840,54 @@ trap 'rmdir "$lock_dir"' EXIT INT TERM
         log_file=UPDATE_LOG_FILE,
     )
     subprocess.Popen(['/bin/sh', '-c', script], start_new_session=True)
+
+SSH_AUTH_LOG_PATTERNS = ["/var/log/secure*", "/var/log/auth.log*"]
+SSH_AUTH_FAIL_PATTERN = re.compile(r'(?:Failed password for(?: invalid user)?|Invalid user) (?P<login>\S+) from (?P<ip>\S+)')
+
+
+def _read_failed_ssh_auth_entries(limit=250):
+    entries = []
+    current_year = datetime.now().year
+    paths = []
+
+    for pattern in SSH_AUTH_LOG_PATTERNS:
+        paths.extend(glob.glob(pattern))
+
+    for path in sorted({p for p in paths if os.path.isfile(p)}, key=os.path.getmtime):
+        opener = gzip.open if path.endswith('.gz') else open
+        try:
+            with opener(path, 'rt', encoding='utf-8', errors='ignore') as handle:
+                for line in handle:
+                    if 'Failed password' not in line and 'Invalid user' not in line:
+                        continue
+                    match = SSH_AUTH_FAIL_PATTERN.search(line)
+                    if not match:
+                        continue
+                    try:
+                        dt = datetime.strptime(line[:15], '%b %d %H:%M:%S').replace(year=current_year)
+                    except ValueError:
+                        continue
+                    entries.append({
+                        'date': dt.strftime('%Y-%m-%d %H:%M:%S'),
+                        'ip': match.group('ip'),
+                        'login': match.group('login'),
+                        '_sort': dt.timestamp(),
+                    })
+        except OSError:
+            continue
+
+    entries.sort(key=lambda item: item['_sort'], reverse=True)
+    for item in entries:
+        item.pop('_sort', None)
+    return entries[:limit]
+
+
+@app.route('/tool/fail-ssh-auth')
+@login_required
+def fail_ssh_auth():
+    entries = _read_failed_ssh_auth_entries()
+    return render_template('fail_ssh_auth.html', entries=entries)
+
 
 @app.route("/logs")
 @login_required

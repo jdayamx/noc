@@ -45,6 +45,12 @@
                 <li><a class="dropdown-item" href="{{ url_for('logs') }}">Nginx logs</a></li>
               </ul>
             </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">Tool</a>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="{{ url_for('fail_ssh_auth') }}">Fail SSH Auth</a></li>
+              </ul>
+            </li>
             {% if is_admin_user is defined and is_admin_user(session.get('username')) %}
             <li class="nav-item"><a href="{{ url_for('user_list') }}" class="nav-link">Users</a></li>
             {% endif %}

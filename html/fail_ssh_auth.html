@@ -1,0 +1,42 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="mb-1">Fail SSH Auth</h2>
+                <p class="mb-0 text-muted">Failed SSH login attempts collected from Linux auth logs.</p>
+            </div>
+            <span class="badge bg-secondary fs-6">{{ entries|length }} records</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 220px;">Date</th>
+                        <th style="width: 180px;">IP</th>
+                        <th>Login</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if entries %}
+                        {% for row in entries %}
+                        <tr>
+                            <td>{{ row.date }}</td>
+                            <td>{{ row.ip }}</td>
+                            <td>{{ row.login }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">No failed SSH auth entries found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
