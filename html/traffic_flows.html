@@ -24,6 +24,7 @@
                         <th>Source Host</th>
                         <th>Destination IP</th>
                         <th>Destination Host</th>
+                        <th>Reputation</th>
                         <th>Proto</th>
                         <th>Port</th>
                         <th>State</th>
@@ -42,7 +43,16 @@
                             <td>{{ flow.src_ip }}</td>
                             <td>{{ flow.src_host }}</td>
                             <td>{{ flow.dst_ip }}</td>
-                            <td>{{ flow.dst_host }}</td>
+                            <td class="{% if flow.dst_blacklisted %}text-danger fw-semibold{% endif %}">
+                                {{ flow.dst_host }}
+                            </td>
+                            <td>
+                                {% if flow.dst_blacklisted %}
+                                    <span class="badge bg-danger">DROP</span>
+                                {% else %}
+                                    <span class="badge bg-success">Clean</span>
+                                {% endif %}
+                            </td>
                             <td>{{ flow.proto }}</td>
                             <td>{{ flow.dst_port }}</td>
                             <td>{{ flow.state }}</td>
@@ -51,7 +61,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">No conntrack flows found.</td>
+                            <td colspan="10" class="text-center text-muted py-4">No conntrack flows found.</td>
                         </tr>
                     {% endif %}
                 </tbody>

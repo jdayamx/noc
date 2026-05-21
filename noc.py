@@ -26,6 +26,8 @@ import gzip
 from math import ceil
 import socket
 import ipaddress
+import bisect
+import urllib.request
 from libs import firewall
 from libs.network import network_bp
 from libs.systemd import systemd_bp
@@ -34,10 +36,14 @@ from collections import Counter
 from collections import deque
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.29"
+APP_VERSION = "1.0.0.30"
 WEB_PORTS = {80, 81, 443, 5000, 1983, 3000, 3010, 3335, 8000, 8080, 8443, 9001}
 _hostname_cache = {}
 _conntrack_cache = {"ts": 0.0, "limit": 0, "flows": []}
+_drop_cache = {"ts": 0.0, "intervals": [], "starts": [], "loaded": False}
+_drop_cache_lock = threading.Lock()
+SPAMHAUS_DROP_URL = "https://www.spamhaus.org/drop/drop_v4.json"
+SPAMHAUS_DROP_TTL = 24 * 3600
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -566,6 +572,86 @@ def _display_conntrack_host(ip_value):
     return _resolve_hostname(ip_value)
 
 
+def _merge_intervals(intervals):
+    if not intervals:
+        return [], []
+
+    intervals.sort(key=lambda item: item[0])
+    merged = [list(intervals[0])]
+    for start, end in intervals[1:]:
+        last = merged[-1]
+        if start <= last[1] + 1:
+            last[1] = max(last[1], end)
+        else:
+            merged.append([start, end])
+
+    merged_tuples = [(start, end) for start, end in merged]
+    starts = [start for start, _ in merged_tuples]
+    return merged_tuples, starts
+
+
+def _load_spamhaus_drop_ranges():
+    cache = _drop_cache
+    now = time.time()
+    if cache["loaded"] and cache["intervals"] and now - cache["ts"] < SPAMHAUS_DROP_TTL:
+        return cache["intervals"], cache["starts"]
+
+    with _drop_cache_lock:
+        cache = _drop_cache
+        now = time.time()
+        if cache["loaded"] and cache["intervals"] and now - cache["ts"] < SPAMHAUS_DROP_TTL:
+            return cache["intervals"], cache["starts"]
+
+        intervals = []
+        try:
+            request = urllib.request.Request(SPAMHAUS_DROP_URL, headers={"User-Agent": "NOC/1.0"})
+            with urllib.request.urlopen(request, timeout=10) as response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8", "ignore").strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    cidr = entry.get("cidr")
+                    if not cidr:
+                        continue
+                    try:
+                        network = ipaddress.ip_network(cidr, strict=False)
+                    except ValueError:
+                        continue
+                    if network.version != 4:
+                        continue
+                    intervals.append((int(network.network_address), int(network.broadcast_address)))
+        except Exception:
+            if cache["intervals"]:
+                return cache["intervals"], cache["starts"]
+            return [], []
+
+        merged, starts = _merge_intervals(intervals)
+        cache.update({"ts": now, "intervals": merged, "starts": starts, "loaded": True})
+        return merged, starts
+
+
+def _is_spamhaus_drop_ip(ip_value):
+    try:
+        ip_obj = ipaddress.ip_address(ip_value)
+    except ValueError:
+        return False
+
+    if ip_obj.version != 4 or ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved:
+        return False
+
+    intervals, starts = _load_spamhaus_drop_ranges()
+    if not intervals:
+        return False
+
+    ip_int = int(ip_obj)
+    idx = bisect.bisect_right(starts, ip_int) - 1
+    return idx >= 0 and ip_int <= intervals[idx][1]
+
+
 def _parse_conntrack_entry(line):
     parts = line.split()
     if len(parts) < 10:
@@ -604,12 +690,16 @@ def _parse_conntrack_entry(line):
     except ValueError:
         timeout_int = 0
 
+    dst_blacklisted = _is_spamhaus_drop_ip(dst_ip)
+
     return {
         'direction': direction,
         'src_ip': src_ip,
         'src_host': _display_conntrack_host(src_ip),
         'dst_ip': dst_ip,
         'dst_host': _display_conntrack_host(dst_ip),
+        'dst_blacklisted': dst_blacklisted,
+        'dst_blacklist_source': 'Spamhaus DROP' if dst_blacklisted else '',
         'proto': proto.upper(),
         'dst_port': dst_port,
         'state': state,
