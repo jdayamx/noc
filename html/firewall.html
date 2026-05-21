@@ -8,7 +8,8 @@
                 <h2 class="mb-1">Firewall</h2>
                 <p class="mb-0 text-muted">iptables rules from the live host.</p>
             </div>
-            <div class="d-flex gap-2 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('firewall_export') }}">Export Commands</a>
                 <span class="badge bg-dark fs-6">{{ firewall_type|default('iptables') }}</span>
                 <span class="badge bg-success fs-6">{{ total_chains }} chains</span>
                 <span class="badge bg-secondary fs-6">{{ total_rules }} rules</span>

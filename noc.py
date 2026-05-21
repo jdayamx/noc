@@ -31,7 +31,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.18"
+APP_VERSION = "1.0.0.19"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -1173,6 +1173,24 @@ def firewall_page():
         total_rules=total_rules,
         total_chains=total_chains,
         firewall_type=firewall.get_firewall_type(),
+    )
+
+
+@app.route('/firewall/export')
+@login_required
+def firewall_export():
+    if firewall.get_firewall_type() != 'iptables':
+        flash('iptables firewall is not detected on this host.', 'warning')
+        return redirect(url_for('lan'))
+
+    export_script = firewall.get_iptables_command_script()
+    filename = f'iptables-firewall-rules-{datetime.now().strftime("%Y%m%d-%H%M%S")}.sh'
+    return Response(
+        export_script,
+        mimetype='text/x-sh',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+        },
     )
 
 
