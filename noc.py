@@ -25,7 +25,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.6"
+APP_VERSION = "1.0.0.7"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -805,6 +805,39 @@ def add_safe_directory(project_path):
     except subprocess.CalledProcessError as e:
         raise Exception(f"Помилка при перевірці safe.directory: {e.stderr}")
 
+UPDATE_LOCK_DIR = "/tmp/noc_update.lockdir"
+UPDATE_LOG_FILE = "/tmp/noc_update.log"
+
+
+def _release_update_lock():
+    try:
+        os.rmdir(UPDATE_LOCK_DIR)
+    except OSError:
+        pass
+
+
+def _launch_update_worker(project_path):
+    script = """#!/bin/sh
+set -eu
+lock_dir="{lock_dir}"
+project_path="{project_path}"
+log_file="{log_file}"
+trap 'rmdir "$lock_dir"' EXIT INT TERM
+{{
+    echo "[$(date -Iseconds)] Starting project update"
+    cd "$project_path"
+    git -c safe.directory="$project_path" fetch --prune origin
+    git -c safe.directory="$project_path" reset --hard origin/master
+    systemctl restart noc.service
+    echo "[$(date -Iseconds)] Project update finished"
+}} >> "$log_file" 2>&1
+""".format(
+        lock_dir=UPDATE_LOCK_DIR,
+        project_path=project_path,
+        log_file=UPDATE_LOG_FILE,
+    )
+    subprocess.Popen(['/bin/sh', '-c', script], start_new_session=True)
+
 @app.route("/logs")
 @login_required
 def logs():
@@ -873,38 +906,24 @@ def logs():
 @admin_required
 def update_project():
     try:
-        # Визначаємо шлях до каталогу проекту
         project_path = get_project_path()
-
-        # Додаємо репозиторій до безпечних директорій, якщо ще не додано
         add_safe_directory(project_path)
 
-        subprocess.run(['git', 'reset', '--hard'], cwd=project_path, check=True, capture_output=True, text=True)
+        try:
+            os.mkdir(UPDATE_LOCK_DIR)
+        except FileExistsError:
+            return jsonify({'message': 'Update already in progress'}), 409
 
-        result = subprocess.run(['git', 'fetch'], cwd=project_path, check=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            return jsonify({'message': f'Помилка при git fetch: {result.stderr}'}), 500
+        try:
+            _launch_update_worker(project_path)
+        except Exception:
+            _release_update_lock()
+            raise
 
-        # Оновлюємо проект
-        result = subprocess.run(['git', 'pull'], cwd=project_path, check=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            return jsonify({'message': f'Помилка при git pull: {result.stderr}'}), 500
+        return jsonify({'message': 'Update queued. NOC will restart after git pull.'}), 202
 
-        # Оновлюємо залежності
-        result = subprocess.run(['pip', 'install', '-r', 'requirements.txt'], cwd=project_path, check=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            return jsonify({'message': f'Помилка при pip install: {result.stderr}'}), 500
-
-        # Якщо все успішно — рестартимо noc
-        subprocess.run(['systemctl', 'stop', 'noc.service'], check=True)
-        subprocess.run(['systemctl', 'start', 'noc.service'], check=True)
-
-        return jsonify({'message': 'Оновлення успішне! NOC перезапущено ✅'}), 200
-
-    except subprocess.CalledProcessError as e:
-        return jsonify({'message': f'Помилка при оновленні: {e.stderr}'}), 500
     except Exception as e:
-        return jsonify({'message': f'Неочікувана помилка: {str(e)}'}), 500
+        return jsonify({'message': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/logout')
 def logout():
