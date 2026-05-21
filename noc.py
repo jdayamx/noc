@@ -25,6 +25,7 @@ import glob
 import gzip
 from math import ceil
 import socket
+import ipaddress
 from libs import firewall
 from libs.network import network_bp
 from libs.systemd import systemd_bp
@@ -33,9 +34,10 @@ from collections import Counter
 from collections import deque
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.26"
+APP_VERSION = "1.0.0.29"
 WEB_PORTS = {80, 81, 443, 5000, 1983, 3000, 3010, 3335, 8000, 8080, 8443, 9001}
 _hostname_cache = {}
+_conntrack_cache = {"ts": 0.0, "limit": 0, "flows": []}
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -520,6 +522,131 @@ def get_web_connections():
 
     return inbound_connections, outbound_connections
 
+def _parse_conntrack_fields(tokens):
+    fields = {}
+    for token in tokens:
+        if '=' not in token:
+            continue
+        key, value = token.split('=', 1)
+        fields[key] = value
+    return fields
+
+
+def _classify_conntrack_direction(src_ip, dst_ip):
+    try:
+        src = ipaddress.ip_address(src_ip)
+        dst = ipaddress.ip_address(dst_ip)
+    except ValueError:
+        return None
+
+    if src.is_loopback or dst.is_loopback:
+        return None
+
+    src_private = src.is_private
+    dst_private = dst.is_private
+
+    if src_private and not dst_private:
+        return 'LAN -> WAN'
+    if not src_private and dst_private:
+        return 'WAN -> LAN'
+    if src_private and dst_private:
+        return 'LAN -> LAN'
+    return 'WAN -> WAN'
+
+
+def _display_conntrack_host(ip_value):
+    try:
+        ip_obj = ipaddress.ip_address(ip_value)
+    except ValueError:
+        return ip_value
+
+    if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved:
+        return ip_value
+
+    return _resolve_hostname(ip_value)
+
+
+def _parse_conntrack_entry(line):
+    parts = line.split()
+    if len(parts) < 10:
+        return None
+
+    proto = parts[2].lower()
+    if proto not in {'tcp', 'udp'}:
+        return None
+
+    timeout = parts[4]
+    state = parts[5]
+
+    second_src_index = None
+    for index in range(7, len(parts)):
+        if parts[index].startswith('src='):
+            second_src_index = index
+            break
+
+    if second_src_index is None:
+        return None
+
+    orig = _parse_conntrack_fields(parts[6:second_src_index])
+    src_ip = orig.get('src', '')
+    dst_ip = orig.get('dst', '')
+    dst_port = orig.get('dport', '')
+
+    if not src_ip or not dst_ip:
+        return None
+
+    direction = _classify_conntrack_direction(src_ip, dst_ip)
+    if direction is None:
+        return None
+
+    try:
+        timeout_int = int(timeout)
+    except ValueError:
+        timeout_int = 0
+
+    return {
+        'direction': direction,
+        'src_ip': src_ip,
+        'src_host': _display_conntrack_host(src_ip),
+        'dst_ip': dst_ip,
+        'dst_host': _display_conntrack_host(dst_ip),
+        'proto': proto.upper(),
+        'dst_port': dst_port,
+        'state': state,
+        'timeout': timeout,
+        'timeout_int': timeout_int,
+    }
+
+
+def get_conntrack_flows(limit=150):
+    cache = _conntrack_cache
+    now = time.time()
+    if cache['flows'] and cache['limit'] >= limit and now - cache['ts'] < 2:
+        return cache['flows'][:limit]
+
+    path = '/proc/net/nf_conntrack' if os.path.exists('/proc/net/nf_conntrack') else '/proc/net/ip_conntrack'
+    if not os.path.exists(path):
+        cache.update({'ts': now, 'limit': 0, 'flows': []})
+        return []
+
+    flows = []
+    try:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as handle:
+            for line in handle:
+                flow = _parse_conntrack_entry(line.strip())
+                if not flow:
+                    continue
+                flows.append(flow)
+    except OSError:
+        cache.update({'ts': now, 'limit': 0, 'flows': []})
+        return []
+
+    direction_order = {'LAN -> WAN': 0, 'WAN -> LAN': 1, 'LAN -> LAN': 2, 'WAN -> WAN': 3}
+    flows.sort(key=lambda item: (direction_order.get(item['direction'], 99), -item['timeout_int'], item['src_ip'], item['dst_ip'], item['dst_port']))
+    cache.update({'ts': now, 'limit': limit, 'flows': flows[:limit]})
+    return cache['flows']
+
+
 def get_recent_http_activity_by_ip(limit=300):
     activity = {}
     for log_entry in _read_recent_access_log_entries(limit):
@@ -711,6 +838,20 @@ def web_connections():
         outbound_connections=outbound_connections,
         inbound_total=len(inbound_connections),
         outbound_total=len(outbound_connections),
+    )
+
+@app.route('/traffic-flows')
+@login_required
+def traffic_flows():
+    flows = get_conntrack_flows(limit=150)
+    lan_wan_total = sum(1 for flow in flows if flow['direction'] == 'LAN -> WAN')
+    wan_lan_total = sum(1 for flow in flows if flow['direction'] == 'WAN -> LAN')
+    return render_template(
+        'traffic_flows.html',
+        flows=flows,
+        total_flows=len(flows),
+        lan_wan_total=lan_wan_total,
+        wan_lan_total=wan_lan_total,
     )
 
 @app.route('/', methods=['GET'])

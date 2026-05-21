@@ -1,0 +1,62 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="mb-1">Traffic Flows</h2>
+                <p class="mb-0 text-muted">Live kernel conntrack snapshot. Fast and lightweight.</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary fs-6">{{ total_flows }} flows</span>
+                <span class="badge bg-success fs-6">{{ lan_wan_total }} lan -> wan</span>
+                <span class="badge bg-warning text-dark fs-6">{{ wan_lan_total }} wan -> lan</span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Direction</th>
+                        <th>Source IP</th>
+                        <th>Source Host</th>
+                        <th>Destination IP</th>
+                        <th>Destination Host</th>
+                        <th>Proto</th>
+                        <th>Port</th>
+                        <th>State</th>
+                        <th>Timeout</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if flows %}
+                        {% for flow in flows %}
+                        <tr>
+                            <td>
+                                <span class="badge {% if flow.direction == 'LAN -> WAN' %}bg-success{% elif flow.direction == 'WAN -> LAN' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                    {{ flow.direction }}
+                                </span>
+                            </td>
+                            <td>{{ flow.src_ip }}</td>
+                            <td>{{ flow.src_host }}</td>
+                            <td>{{ flow.dst_ip }}</td>
+                            <td>{{ flow.dst_host }}</td>
+                            <td>{{ flow.proto }}</td>
+                            <td>{{ flow.dst_port }}</td>
+                            <td>{{ flow.state }}</td>
+                            <td>{{ flow.timeout }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">No conntrack flows found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
