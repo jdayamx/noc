@@ -1,0 +1,92 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<div class="container py-3 h-100">
+    <div class="card rounded-3 text-black p-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="mb-1">Web Connections</h2>
+                <p class="mb-0 text-muted">Socket-level web traffic with the latest nginx host/request seen for each remote IP.</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary fs-6">{{ inbound_total }} inbound</span>
+                <span class="badge bg-success fs-6">{{ outbound_total }} outbound</span>
+            </div>
+        </div>
+
+        <h4 class="mb-3">Inbound Web Connections</h4>
+        <div class="table-responsive mb-4">
+            <table class="table table-sm table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Local Service</th>
+                        <th>Last HTTP Host</th>
+                        <th>Last HTTP Request</th>
+                        <th>Remote IP</th>
+                        <th>Remote Host</th>
+                        <th>Remote Port</th>
+                        <th>PID</th>
+                        <th>Process</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if inbound_connections %}
+                        {% for conn in inbound_connections %}
+                        <tr>
+                            <td>{{ conn.service }}</td>
+                            <td>{{ conn.last_http_host or '-' }}</td>
+                            <td class="text-break">{{ conn.last_http_request or '-' }}</td>
+                            <td>{{ conn.remote_ip }}</td>
+                            <td>{{ conn.remote_host }}</td>
+                            <td>{{ conn.remote_port }}</td>
+                            <td>{{ conn.pid }}</td>
+                            <td>{{ conn.process }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">No inbound web connections found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <h4 class="mb-3">Outbound Web Connections</h4>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Local IP</th>
+                        <th>Local Port</th>
+                        <th>Remote Service</th>
+                        <th>Remote IP</th>
+                        <th>Remote Host</th>
+                        <th>PID</th>
+                        <th>Process</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if outbound_connections %}
+                        {% for conn in outbound_connections %}
+                        <tr>
+                            <td>{{ conn.local_ip }}</td>
+                            <td>{{ conn.local_port }}</td>
+                            <td>{{ conn.service }}</td>
+                            <td>{{ conn.remote_ip }}</td>
+                            <td>{{ conn.remote_host }}</td>
+                            <td>{{ conn.pid }}</td>
+                            <td>{{ conn.process }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No outbound web connections found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

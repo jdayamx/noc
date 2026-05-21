@@ -24,14 +24,18 @@ from datetime import datetime
 import glob
 import gzip
 from math import ceil
+import socket
 from libs import firewall
 from libs.network import network_bp
 from libs.systemd import systemd_bp
 from libs.security import admin_required, csrf_token, get_admin_usernames, is_admin_user, validate_csrf
 from collections import Counter
+from collections import deque
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.19"
+APP_VERSION = "1.0.0.26"
+WEB_PORTS = {80, 81, 443, 5000, 1983, 3000, 3010, 3335, 8000, 8080, 8443, 9001}
+_hostname_cache = {}
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -440,6 +444,138 @@ def get_network_connections():
     
     return connections
 
+def _resolve_hostname(ip_address):
+    if not ip_address:
+        return "Unknown"
+
+    if ip_address in {"127.0.0.1", "::1"}:
+        return "localhost"
+
+    cached = _hostname_cache.get(ip_address)
+    if cached is not None:
+        return cached
+
+    try:
+        hostname = socket.gethostbyaddr(ip_address)[0]
+    except Exception:
+        hostname = ip_address
+
+    _hostname_cache[ip_address] = hostname
+    return hostname
+
+def _get_process_name(pid):
+    if not pid:
+        return "Unknown"
+
+    try:
+        return psutil.Process(pid).name()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, psutil.Error):
+        return "Unknown"
+
+def _is_web_port(port):
+    return port in WEB_PORTS
+
+def get_web_connections():
+    inbound_connections = []
+    outbound_connections = []
+    recent_http_by_ip = get_recent_http_activity_by_ip(limit=300)
+
+    for conn in psutil.net_connections(kind="inet"):
+        if conn.status != psutil.CONN_ESTABLISHED or not conn.raddr or not conn.laddr:
+            continue
+
+        local_port = getattr(conn.laddr, "port", None)
+        remote_port = getattr(conn.raddr, "port", None)
+        local_ip = getattr(conn.laddr, "ip", "")
+        remote_ip = getattr(conn.raddr, "ip", "")
+
+        if local_port is None or remote_port is None:
+            continue
+
+        if not _is_web_port(local_port) and not _is_web_port(remote_port):
+            continue
+
+        record = {
+            "pid": conn.pid or 0,
+            "process": _get_process_name(conn.pid),
+            "local_ip": local_ip,
+            "local_port": local_port,
+            "remote_ip": remote_ip,
+            "remote_port": remote_port,
+            "remote_host": _resolve_hostname(remote_ip),
+            "last_http_host": recent_http_by_ip.get(remote_ip, {}).get("host", ""),
+            "last_http_request": recent_http_by_ip.get(remote_ip, {}).get("request", ""),
+            "last_http_status": recent_http_by_ip.get(remote_ip, {}).get("status", ""),
+        }
+
+        if _is_web_port(local_port):
+            record["service"] = f"{local_ip}:{local_port}"
+            inbound_connections.append(record)
+        else:
+            record["service"] = f"{remote_ip}:{remote_port}"
+            outbound_connections.append(record)
+
+    inbound_connections.sort(key=lambda item: (item["local_port"], item["remote_ip"], item["remote_port"]))
+    outbound_connections.sort(key=lambda item: (item["remote_ip"], item["remote_port"], item["local_port"]))
+
+    return inbound_connections, outbound_connections
+
+def get_recent_http_activity_by_ip(limit=300):
+    activity = {}
+    for log_entry in _read_recent_access_log_entries(limit):
+        ip = log_entry.get("remote_addr", "")
+        if not ip:
+            continue
+        activity[ip] = {
+            "time": log_entry.get("time_local", ""),
+            "host": log_entry.get("host", ""),
+            "request": log_entry.get("request", ""),
+            "status": log_entry.get("status", ""),
+        }
+    return activity
+
+def _read_recent_access_log_entries(limit=2000):
+    if not os.path.exists(LOG_FILE):
+        return []
+
+    if platform.system() == "Linux":
+        try:
+            output = subprocess.check_output(
+                ["tail", "-n", str(limit), LOG_FILE],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            output = ""
+        if output:
+            lines = output.splitlines()
+        else:
+            lines = []
+    else:
+        lines = deque(maxlen=limit)
+        try:
+            with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as handle:
+                for line in handle:
+                    lines.append(line.rstrip("\n"))
+        except OSError:
+            return []
+        lines = list(lines)
+
+    entries = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            log_entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        entries.append(log_entry)
+
+    return entries
+
 def get_summarize_connections():
     from collections import Counter
 
@@ -564,6 +700,18 @@ def lan():
     return render_template('lan.html', network_info=network_info, 
                            arp_table=arp_table, network_connections=network_connections,
                            summarize_connections=summarize_connections)
+
+@app.route('/web-connections')
+@login_required
+def web_connections():
+    inbound_connections, outbound_connections = get_web_connections()
+    return render_template(
+        'web_connections.html',
+        inbound_connections=inbound_connections,
+        outbound_connections=outbound_connections,
+        inbound_total=len(inbound_connections),
+        outbound_total=len(outbound_connections),
+    )
 
 @app.route('/', methods=['GET'])
 def home():
@@ -1197,43 +1345,30 @@ def firewall_export():
 @app.route("/logs")
 @login_required
 def logs():
-    if not os.path.exists(LOG_FILE):
-        logs = []
-    else:
-        logs = []
-        # Відкриваємо файл з ігноруванням не-UTF8 символів
-        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    logs.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+    logs = _read_recent_access_log_entries(limit=2000)
 
-    # перевертаємо масив, щоб останні записи були першими
+    # ?????????? ?????, ??? ??????? ?????? ???? ???????
     logs.reverse()
 
-    # ----------------- унікальні URL -----------------
+    # ----------------- ????????? URL -----------------
     url_counter = Counter()
     for l in logs:
         req = l.get("request", "")
         url_counter[req] += 1
 
-    # ----------------- унікальні IP -----------------
+    # ----------------- ????????? IP -----------------
     ip_counter = Counter()
     for l in logs:
         ip = l.get("remote_addr", "")
         ip_counter[ip] += 1
 
-    # ----------------- унікальні User-Agent -----------------
+    # ----------------- ????????? User-Agent -----------------
     ua_counter = Counter()
     for l in logs:
         ua = l.get("http_user_agent", "")
         ua_counter[ua] += 1
 
-    # ----------------- помилки -----------------
+    # ----------------- ??????? -----------------
     errors = []
     for l in logs:
         try:
@@ -1256,7 +1391,6 @@ def logs():
         user_agents=ua_counter.most_common(),
         errors=errors
     )
-
 
 @app.route('/update_project', methods=['POST'])
 @admin_required
