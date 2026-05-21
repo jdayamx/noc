@@ -10,6 +10,7 @@ import json
 import os
 import time
 import threading
+import shutil
 import platform
 if platform.system() == "Linux":
     import pyudev
@@ -24,6 +25,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
+APP_VERSION = "1.0.0.6"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -71,11 +73,13 @@ def inject_security_helpers():
     return {
         "csrf_token": csrf_token,
         "is_admin_user": is_admin_user,
+        "app_version": APP_VERSION,
     }
 
 
 app.jinja_env.globals["csrf_token"] = csrf_token
 app.jinja_env.globals["is_admin_user"] = is_admin_user
+app.jinja_env.globals["app_version"] = APP_VERSION
 
 
 @app.before_request
@@ -228,44 +232,46 @@ def get_cpu_info():
     return cpu_info
 
 def get_ram_info():
-    # Отримуємо основну інформацію про пам'ять
     mem = psutil.virtual_memory()
-    
-    # Використовуємо dmidecode для детальної інформації про модулі пам'яті
-    result = subprocess.run(['sudo', 'dmidecode', '--type', '17'], stdout=subprocess.PIPE)
-    output = result.stdout.decode()
 
     ram_info = []
-    current_ram = {}
-    
-    for line in output.splitlines():
-        # Шукаємо розмір планки
-        if "Size" in line:
-            if "No Module Installed" not in line:
-                size = line.split(":")[1].strip()
-                current_ram['size'] = size
-        # Шукаємо швидкість планки
-        elif "Speed" in line:
-            speed = line.split(":")[1].strip()
-            current_ram['speed'] = speed
-        # Коли знаходимо нову планку пам'яті
-        elif "Locator" in line:
+    dmidecode_path = shutil.which("dmidecode")
+    if dmidecode_path:
+        try:
+            result = subprocess.run(
+                [dmidecode_path, "--type", "17"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            current_ram = {}
+            for line in result.stdout.splitlines():
+                if "Size" in line:
+                    if "No Module Installed" not in line:
+                        size = line.split(":", 1)[1].strip()
+                        current_ram["size"] = size
+                elif "Speed" in line:
+                    speed = line.split(":", 1)[1].strip()
+                    current_ram["speed"] = speed
+                elif "Locator" in line:
+                    if current_ram:
+                        ram_info.append(current_ram)
+                    current_ram = {}
+
             if current_ram:
-                ram_info.append(current_ram)  # додаємо попередню планку
-            current_ram = {}  # очищуємо поточну інформацію для нової планки
+                ram_info.append(current_ram)
+        except (OSError, subprocess.SubprocessError):
+            pass
 
-    if current_ram:
-        ram_info.append(current_ram)  # додаємо останню планку, якщо є
-
-    # Повертати загальну інформацію про пам'ять разом з деталями про планки
     return {
         "total": mem.total,
         "available": mem.available,
         "used": mem.used,
         "percent": mem.percent,
-        "ram_modules": ram_info  # додано деталі про планки пам'яті
+        "ram_modules": ram_info,
     }
-
 def get_interface_type(iface):
     try:
         result = subprocess.run(['ethtool', iface], stdout=subprocess.PIPE, text=True)
@@ -394,17 +400,12 @@ def get_disk_info():
     partitions = psutil.disk_partitions()
 
     for partition in partitions:
-        print(f"Перевіряємо розділ: {partition.device}, mountpoint: {partition.mountpoint}")
-        # Перевіряємо, чи правильний формат шляху
-        
-        if partition.mountpoint and partition.mountpoint != '':  # Перевірка на наявність шляху
+        if partition.mountpoint and partition.mountpoint != "":
             try:
-                # Отримуємо інформацію про використання кожного розділу
                 usage = psutil.disk_usage(partition.mountpoint)
                 mountpoint = partition.mountpoint
                 if platform.system() == "Linux":
-                    mountpoint = partition.mountpoint.replace('\\', '/')
-                # Додаємо інформацію в список
+                    mountpoint = partition.mountpoint.replace("\\", "/")
                 disk_info.append({
                     "device": partition.device,
                     "mountpoint": mountpoint,
@@ -412,12 +413,11 @@ def get_disk_info():
                     "size": usage.total,
                     "free": usage.free,
                     "used": usage.used,
-                    "percent": usage.percent
+                    "percent": usage.percent,
                 })
-            except Exception as e:
-                print(f"Не вдалося отримати інформацію для {partition.device}: {str(e)}")
+            except Exception:
+                pass
     return disk_info
-
 def get_network_connections():
     connections = []
     
