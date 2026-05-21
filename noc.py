@@ -28,7 +28,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.10"
+APP_VERSION = "1.0.0.11"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -885,8 +885,35 @@ def _read_failed_ssh_auth_entries(limit=250):
 @app.route('/tool/fail-ssh-auth')
 @login_required
 def fail_ssh_auth():
-    entries = _read_failed_ssh_auth_entries()
-    return render_template('fail_ssh_auth.html', entries=entries)
+    entries = _read_failed_ssh_auth_entries(limit=2000)
+    ip_filter = (request.args.get('ip') or '').strip()
+    login_filter = (request.args.get('login') or '').strip()
+
+    if ip_filter:
+        needle = ip_filter.casefold()
+        entries = [entry for entry in entries if needle in entry['ip'].casefold()]
+    if login_filter:
+        needle = login_filter.casefold()
+        entries = [entry for entry in entries if needle in entry['login'].casefold()]
+
+    per_page = 25
+    page = request.args.get('page', 1, type=int)
+    total_entries = len(entries)
+    total_pages = max(1, ceil(total_entries / per_page))
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    paginated_entries = entries[start:start + per_page]
+
+    return render_template(
+        'fail_ssh_auth.html',
+        entries=paginated_entries,
+        ip_filter=ip_filter,
+        login_filter=login_filter,
+        page=page,
+        total_pages=total_pages,
+        total_entries=total_entries,
+        per_page=per_page,
+    )
 
 
 @app.route("/logs")
