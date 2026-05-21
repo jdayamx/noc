@@ -1,0 +1,141 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:1983
+ * Running on http://10.1.1.10:1983
+Press CTRL+C to quit
+'wmic' is not recognized as an internal or external command,
+operable program or batch file.
+[2026-05-21 05:06:01,967] ERROR in app: Exception on /dashboard [GET]
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1340, in connect
+    obj = GetObject(moniker)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 86, in GetObject
+    return Moniker(Pathname, clsctx)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 103, in Moniker
+    moniker, i, bindCtx = pythoncom.MkParseDisplayName(Pathname)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+pywintypes.com_error: (-2147221020, 'Invalid syntax', None, None)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1354, in connect
+    handle_com_error()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python\Lib\site-packages\wmi.py", line 258, in handle_com_error
+    raise klass(com_error=err)
+wmi.x_wmi_uninitialised_thread: <x_wmi: Unexpected COM Error (-2147221020, 'Invalid syntax', None, None)>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\flask\app.py", line 2528, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "S:\noc\noc.py", line 158, in decorated_function
+    return f(*args, **kwargs)
+  File "S:\noc\noc.py", line 780, in dashboard
+    usb_devices = get_usb_devices()
+  File "S:\noc\noc.py", line 485, in get_usb_devices
+    c = wmi.WMI()
+  File "C:\Python\Lib\site-packages\wmi.py", line 1357, in connect
+    raise x_wmi_uninitialised_thread("WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex]")
+wmi.x_wmi_uninitialised_thread: <x_wmi: WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex] (no underlying exception)>
+127.0.0.1 - - [21/May/2026 05:06:02] "GET /dashboard HTTP/1.1" 500 -
+'wmic' is not recognized as an internal or external command,
+operable program or batch file.
+[2026-05-21 05:06:08,706] ERROR in app: Exception on /dashboard [GET]
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1340, in connect
+    obj = GetObject(moniker)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 86, in GetObject
+    return Moniker(Pathname, clsctx)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 103, in Moniker
+    moniker, i, bindCtx = pythoncom.MkParseDisplayName(Pathname)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+pywintypes.com_error: (-2147221020, 'Invalid syntax', None, None)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1354, in connect
+    handle_com_error()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python\Lib\site-packages\wmi.py", line 258, in handle_com_error
+    raise klass(com_error=err)
+wmi.x_wmi_uninitialised_thread: <x_wmi: Unexpected COM Error (-2147221020, 'Invalid syntax', None, None)>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\flask\app.py", line 2528, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "S:\noc\noc.py", line 158, in decorated_function
+    return f(*args, **kwargs)
+  File "S:\noc\noc.py", line 780, in dashboard
+    usb_devices = get_usb_devices()
+  File "S:\noc\noc.py", line 485, in get_usb_devices
+    c = wmi.WMI()
+  File "C:\Python\Lib\site-packages\wmi.py", line 1357, in connect
+    raise x_wmi_uninitialised_thread("WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex]")
+wmi.x_wmi_uninitialised_thread: <x_wmi: WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex] (no underlying exception)>
+127.0.0.1 - - [21/May/2026 05:06:08] "GET /dashboard HTTP/1.1" 500 -
+'wmic' is not recognized as an internal or external command,
+operable program or batch file.
+[2026-05-21 05:06:18,466] ERROR in app: Exception on /dashboard [GET]
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1340, in connect
+    obj = GetObject(moniker)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 86, in GetObject
+    return Moniker(Pathname, clsctx)
+  File "C:\Python\Lib\site-packages\win32com\client\__init__.py", line 103, in Moniker
+    moniker, i, bindCtx = pythoncom.MkParseDisplayName(Pathname)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+pywintypes.com_error: (-2147221020, 'Invalid syntax', None, None)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\wmi.py", line 1354, in connect
+    handle_com_error()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python\Lib\site-packages\wmi.py", line 258, in handle_com_error
+    raise klass(com_error=err)
+wmi.x_wmi_uninitialised_thread: <x_wmi: Unexpected COM Error (-2147221020, 'Invalid syntax', None, None)>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python\Lib\site-packages\flask\app.py", line 2528, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Python\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "S:\noc\noc.py", line 158, in decorated_function
+    return f(*args, **kwargs)
+  File "S:\noc\noc.py", line 780, in dashboard
+    usb_devices = get_usb_devices()
+  File "S:\noc\noc.py", line 485, in get_usb_devices
+    c = wmi.WMI()
+  File "C:\Python\Lib\site-packages\wmi.py", line 1357, in connect
+    raise x_wmi_uninitialised_thread("WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex]")
+wmi.x_wmi_uninitialised_thread: <x_wmi: WMI returned a syntax error: you're probably running inside a thread without first calling pythoncom.CoInitialize[Ex] (no underlying exception)>
+127.0.0.1 - - [21/May/2026 05:06:18] "GET /dashboard HTTP/1.1" 500 -
+127.0.0.1 - - [21/May/2026 05:06:50] "GET /dashboard HTTP/1.1" 302 -

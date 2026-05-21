@@ -14,6 +14,7 @@ import shutil
 import platform
 import csv
 import io
+from pathlib import Path
 if platform.system() == "Linux":
     import pyudev
 else:
@@ -30,7 +31,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.13"
+APP_VERSION = "1.0.0.17"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -468,7 +469,7 @@ def get_usb_devices():
     devices = []
     if platform.system() == "Linux":
         context = pyudev.Context()
-        
+
         for device in context.list_devices(subsystem='usb', DEVTYPE='usb_device'):
             vendor = device.get('ID_VENDOR', 'Unknown Vendor')
             product = device.get('ID_MODEL', 'Unknown Device')
@@ -481,15 +482,31 @@ def get_usb_devices():
                 "name": f"{vendor} {product}"
             })
     else:
-        c = wmi.WMI()
-        for usb in c.Win32_PnPEntity():
-            caption = getattr(usb, "Caption", "") or ""
-            if "USB" in caption:
-                devices.append({
-                    "bus": "N/A",
-                    "device": usb.DeviceID,
-                    "name": caption
-                })
+        pythoncom = None
+        try:
+            import pythoncom  # type: ignore
+            pythoncom.CoInitialize()
+        except Exception:
+            pythoncom = None
+
+        try:
+            c = wmi.WMI()
+            for usb in c.Win32_PnPEntity():
+                caption = getattr(usb, "Caption", "") or ""
+                if "USB" in caption:
+                    devices.append({
+                        "bus": "N/A",
+                        "device": usb.DeviceID,
+                        "name": caption
+                    })
+        except Exception:
+            return []
+        finally:
+            if pythoncom is not None:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
 
     return devices
 
@@ -940,6 +957,202 @@ def fail_ssh_auth_export():
     response = Response(buffer.getvalue(), mimetype='text/csv; charset=utf-8')
     response.headers['Content-Disposition'] = 'attachment; filename=fail_ssh_auth.csv'
     return response
+
+
+DHCP_LEASE_FILE = "/var/lib/dhcpd/dhcpd.leases"
+DHCP_HOSTNAME_PATTERNS = [
+    re.compile(r'client-hostname "([^"]+)"'),
+    re.compile(r'set host-name = "([^"]+)"'),
+    re.compile(r'set ddns-hostname = "([^"]+)"'),
+]
+DHCP_TIMESTAMP_RE = re.compile(r'^(starts|ends|cltt|tstp)\s+\d+\s+(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2});$')
+
+
+def _format_dhcp_timestamp(value):
+    if not value:
+        return ""
+    try:
+        return datetime.strptime(value, '%Y/%m/%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        return value
+
+
+def _parse_dhcp_timestamp(value):
+    if not value:
+        return 0
+    try:
+        return datetime.strptime(value, '%Y/%m/%d %H:%M:%S').timestamp()
+    except ValueError:
+        return 0
+
+
+def _read_dhcp_leases():
+    active = []
+    history = []
+    if not os.path.exists(DHCP_LEASE_FILE):
+        return active, history
+
+    current = None
+    with open(DHCP_LEASE_FILE, 'r', encoding='utf-8', errors='ignore') as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith('#') or line.startswith('authoring-byte-order'):
+                continue
+
+            if line.startswith('lease ') and line.endswith('{'):
+                current = {
+                    'ip': line.split()[1],
+                    'state': '',
+                    'mac': '',
+                    'hostname': '',
+                    'starts': '',
+                    'ends': '',
+                    'cltt': '',
+                    'tstp': '',
+                }
+                continue
+
+            if line == '}':
+                if current:
+                    date_source = current['cltt'] or current['starts'] or current['ends'] or current['tstp'] or ''
+                    row = {
+                        'ip': current['ip'],
+                        'mac': current['mac'] or 'Unknown',
+                        'hostname': current['hostname'] or 'Unknown',
+                        'starts': _format_dhcp_timestamp(current['starts']),
+                        'ends': _format_dhcp_timestamp(current['ends']),
+                        'date': _format_dhcp_timestamp(date_source),
+                        '_sort': _parse_dhcp_timestamp(date_source),
+                    }
+                    history.append(row)
+                    if current['state'] == 'active':
+                        active.append(row.copy())
+                current = None
+                continue
+
+            if current is None:
+                continue
+
+            if line.startswith('binding state '):
+                current['state'] = line.split()[2].rstrip(';')
+                continue
+
+            if line.startswith('hardware ethernet '):
+                current['mac'] = line.split()[2].rstrip(';')
+                continue
+
+            match = DHCP_TIMESTAMP_RE.match(line)
+            if match:
+                current[match.group(1)] = match.group(2)
+                continue
+
+            for hostname_pattern in DHCP_HOSTNAME_PATTERNS:
+                hostname_match = hostname_pattern.search(line)
+                if hostname_match:
+                    current['hostname'] = hostname_match.group(1)
+                    break
+
+    history.sort(key=lambda item: item['_sort'], reverse=True)
+    active.sort(key=lambda item: item['_sort'], reverse=True)
+
+    dedup_active = []
+    seen_ips = set()
+    for item in active:
+        if item['ip'] in seen_ips:
+            continue
+        seen_ips.add(item['ip'])
+        dedup_active.append(item)
+
+    for item in history:
+        item.pop('_sort', None)
+    for item in dedup_active:
+        item.pop('_sort', None)
+
+    return dedup_active, history
+
+
+@app.route('/dhcp')
+@login_required
+def dhcp():
+    active_leases, history_leases = _read_dhcp_leases()
+    per_page = 25
+    page = request.args.get('page', 1, type=int)
+    total_history = len(history_leases)
+    total_pages = max(1, ceil(total_history / per_page))
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    paginated_history = history_leases[start:start + per_page]
+
+    return render_template(
+        'dhcp.html',
+        active_leases=active_leases,
+        history_leases=paginated_history,
+        active_total=len(active_leases),
+        total_history=total_history,
+        page=page,
+        total_pages=total_pages,
+        per_page=per_page,
+    )
+
+
+@app.route('/dhcp/kick', methods=['POST'])
+@admin_required
+def dhcp_kick():
+    ip_address = (request.form.get('ip') or '').strip()
+    if not ip_address:
+        flash('Missing DHCP lease IP.', 'danger')
+        return redirect(url_for('dhcp'))
+
+    lease_path = Path(DHCP_LEASE_FILE)
+    if not lease_path.exists():
+        flash('DHCP lease file not found.', 'danger')
+        return redirect(url_for('dhcp'))
+
+    lines = lease_path.read_text(encoding='utf-8', errors='ignore').splitlines(True)
+    blocks = []
+    current = None
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('lease ') and stripped.endswith('{'):
+            current = {'start': index, 'ip': stripped.split()[1], 'state_idx': None, 'state': None}
+            continue
+        if current is not None:
+            if stripped.startswith('binding state '):
+                current['state_idx'] = index
+                current['state'] = stripped.split()[2].rstrip(';')
+            if stripped == '}':
+                current['end'] = index
+                blocks.append(current)
+                current = None
+
+    target = None
+    for block in reversed(blocks):
+        if block.get('ip') == ip_address and block.get('state') == 'active' and block.get('state_idx') is not None:
+            target = block
+            break
+
+    if target is None:
+        flash(f'Active DHCP lease for {ip_address} was not found.', 'warning')
+        return redirect(url_for('dhcp'))
+
+    old_mode = lease_path.stat().st_mode
+    tmp_path = lease_path.with_name(lease_path.name + '.tmp')
+    lines[target['state_idx']] = lines[target['state_idx']].replace('binding state active;', 'binding state free;')
+    tmp_path.write_text(''.join(lines), encoding='utf-8')
+    try:
+        os.chmod(tmp_path, old_mode & 0o777)
+    except OSError:
+        pass
+
+    try:
+        shutil.copystat(lease_path, tmp_path)
+    except OSError:
+        pass
+
+    os.replace(tmp_path, lease_path)
+    subprocess.run(['systemctl', 'restart', 'dhcpd.service'], check=True)
+    flash(f'DHCP lease {ip_address} was kicked.', 'success')
+    return redirect(url_for('dhcp'))
 
 
 @app.route("/logs")
