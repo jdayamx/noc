@@ -15,6 +15,7 @@
                         <h4 class="mt-1 mb-5 pb-1">Network Operation Center</h4>
                       </div>
                       <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
                         <div data-mdb-input-init class="form-outline mb-4">
                             <label class="form-label" for="username">Username</label>
                             <input type="text" id="username" name="username" class="form-control" placeholder="admin" />

@@ -1,6 +1,7 @@
 import psutil
 import subprocess
-from flask import  jsonify, flash, Flask, render_template, request, redirect, url_for, session
+import secrets
+from flask import jsonify, flash, Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
@@ -19,6 +20,7 @@ from math import ceil
 from libs import firewall
 from libs.network import network_bp
 from libs.systemd import systemd_bp
+from libs.security import admin_required, csrf_token, get_admin_usernames, is_admin_user, validate_csrf
 from collections import Counter
 
 previous_traffic = {}
@@ -27,17 +29,65 @@ app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
 app.register_blueprint(systemd_bp)
 
-app.secret_key = 'your_secret_key'
-
 DB_FOLDER = 'db'
 DATABASE = os.path.join(DB_FOLDER, 'users.db')
 DATABASE_NET = os.path.join(DB_FOLDER, 'network.db')
+SECRET_KEY_FILE = os.path.join(DB_FOLDER, 'secret_key.txt')
 
 LOG_FILE = "/var/log/nginx/access.json"
+
+def get_secret_key():
+    os.makedirs(DB_FOLDER, exist_ok=True)
+
+    env_key = os.environ.get("NOC_SECRET_KEY")
+    if env_key:
+        return env_key
+
+    if os.path.exists(SECRET_KEY_FILE):
+        with open(SECRET_KEY_FILE, "r", encoding="utf-8") as f:
+            key = f.read().strip()
+            if key:
+                return key
+
+    key = secrets.token_urlsafe(48)
+    with open(SECRET_KEY_FILE, "w", encoding="utf-8") as f:
+        f.write(key)
+    return key
+
+app.secret_key = get_secret_key()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("NOC_COOKIE_SECURE", "0") == "1",
+)
 
 # Create the db directory if it doesn't exist
 if not os.path.exists(DB_FOLDER):
     os.makedirs(DB_FOLDER)
+
+
+@app.context_processor
+def inject_security_helpers():
+    return {
+        "csrf_token": csrf_token,
+        "is_admin_user": is_admin_user,
+    }
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+app.jinja_env.globals["is_admin_user"] = is_admin_user
+
+
+@app.before_request
+def enforce_csrf():
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not validate_csrf():
+        if request.is_json or request.path == "/update_project":
+            return jsonify({"message": "Invalid CSRF token."}), 400
+
+        flash("Invalid CSRF token.", "danger")
+        if request.path == "/login":
+            return redirect(url_for("login"))
+        return redirect(url_for("dashboard"))
 
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
@@ -99,12 +149,26 @@ def login_required(f):
     return decorated_function
 
 def add_default_users():
-    users = [
-        ('admin', generate_password_hash('admin')),
-        ('user', generate_password_hash('user'))
-    ]
     with sqlite3.connect(DATABASE) as conn:
-        conn.executemany('INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)', users)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM users')
+        if cursor.fetchone()[0] > 0:
+            return
+
+        admin_username = sorted(get_admin_usernames())[0]
+        admin_password = os.environ.get('NOC_ADMIN_PASSWORD')
+        if not admin_password:
+            admin_password = secrets.token_urlsafe(16)
+            bootstrap_file = os.path.join(DB_FOLDER, 'bootstrap_credentials.txt')
+            with open(bootstrap_file, 'w', encoding='utf-8') as f:
+                f.write(f'username={admin_username}\n')
+                f.write(f'password={admin_password}\n')
+            print(f'Bootstrap admin credentials written to {bootstrap_file}')
+
+        cursor.execute(
+            'INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)',
+            (admin_username, generate_password_hash(admin_password))
+        )
         conn.commit()
 
 def get_cpu_name():
@@ -414,11 +478,12 @@ def get_usb_devices():
     else:
         c = wmi.WMI()
         for usb in c.Win32_PnPEntity():
-            if "USB" in usb.Caption:
+            caption = getattr(usb, "Caption", "") or ""
+            if "USB" in caption:
                 devices.append({
                     "bus": "N/A",
                     "device": usb.DeviceID,
-                    "name": usb.Caption
+                    "name": caption
                 })
 
     return devices
@@ -450,6 +515,7 @@ def scan_bluetooth_devices():
     return []
 
 @app.route('/get_dashboard_data')
+@login_required
 def get_dashboard_data():
     cpu_info = get_cpu_info()
     disk_info = get_disk_info()
@@ -503,7 +569,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/user/list')
-@login_required
+@admin_required
 def user_list():
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
@@ -513,7 +579,7 @@ def user_list():
     return render_template('user_list.html', users=users)
 
 @app.route('/ip/list')
-@login_required
+@admin_required
 def ip_list():
     # Кількість елементів на сторінці
     per_page = 15
@@ -554,7 +620,7 @@ def is_valid_mac(mac):
     return bool(re.match(pattern, mac))
 
 @app.route('/ip/add', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def ip_add():
     if request.method == 'POST':
         new_ip = request.form['ip']
@@ -579,7 +645,7 @@ def ip_add():
 
     return render_template('ip_edit.html')
 @app.route('/ip/edit/<id>', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def ip_edit(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.row_factory = sqlite3.Row
@@ -609,8 +675,8 @@ def ip_edit(id):
 
         return render_template('ip_edit.html', ip=ip, request=request)
 
-@app.route('/ip/delete/<id>', methods=['GET'])
-@login_required
+@app.route('/ip/delete/<id>', methods=['POST'])
+@admin_required
 def ip_delete(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.execute('DELETE FROM ip WHERE id = ?', (id,))
@@ -620,7 +686,7 @@ def ip_delete(id):
     return redirect(url_for('ip_list'))
 
 @app.route('/user/edit/<username>', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def edit_user(username):
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
@@ -661,7 +727,7 @@ def edit_user(username):
 
         return render_template('edit_user.html', user=user, request=request)
 @app.route('/user/add', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def user_add():
     if request.method == 'POST':
         username = request.form['username']
@@ -682,11 +748,11 @@ def user_add():
 
     return render_template('user_add.html')
 
-@app.route('/user/delete/<username>', methods=['GET'])
-@login_required
+@app.route('/user/delete/<username>', methods=['POST'])
+@admin_required
 def delete_user(username):
-    if username == 'admin':
-        flash('Cannot delete the admin user.', 'danger')
+    if is_admin_user(username):
+        flash('Cannot delete an admin user.', 'danger')
         return redirect(url_for('user_list'))
 
     with sqlite3.connect(DATABASE) as conn:
@@ -707,12 +773,21 @@ def dashboard():
     processes = get_processes()
     usb_devices = get_usb_devices()
     firewalls = firewall.check_firewall()
+    per_page = 15
+    page = request.args.get('process_page', 1, type=int)
+    total_processes = len(processes)
+    total_pages = max(1, ceil(total_processes / per_page))
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    paginated_processes = processes[start:start + per_page]
     
     return render_template('dashboard.html', username=session['username'], 
                            cpu_info=cpu_info, disk_info=disk_info, 
                            ram_info=ram_info, network_info=network_info, 
-                           arp_table=arp_table, processes=processes,
-                           usb_devices=usb_devices, firewalls=firewalls)
+                           arp_table=arp_table, processes=paginated_processes,
+                           usb_devices=usb_devices, firewalls=firewalls,
+                           process_page=page, process_total_pages=total_pages,
+                           process_total=total_processes, process_per_page=per_page)
 
 def get_project_path():
     return os.path.dirname(os.path.abspath(__file__))
@@ -795,7 +870,7 @@ def logs():
 
 
 @app.route('/update_project', methods=['POST'])
-@login_required
+@admin_required
 def update_project():
     try:
         # Визначаємо шлях до каталогу проекту
@@ -834,12 +909,19 @@ def update_project():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('_csrf_token', None)
     return redirect(url_for('login'))
 
 @app.route('/reset', methods=['POST'])
+@admin_required
 def reset_users():
     with sqlite3.connect(DATABASE) as conn:
-        conn.execute('DELETE FROM users WHERE username NOT IN ("admin", "user")')
+        admin_usernames = tuple(sorted(get_admin_usernames()))
+        placeholders = ", ".join("?" for _ in admin_usernames)
+        conn.execute(
+            f'DELETE FROM users WHERE username NOT IN ({placeholders})',
+            admin_usernames,
+        )
         conn.commit()
 
         add_default_users()
@@ -887,4 +969,8 @@ if __name__ == '__main__':
     add_default_users()
     #if not os.environ.get("WERKZEUG_RUN_MAIN"):
     start_scheduler()
-    app.run(host='0.0.0.0', port=1983, debug=True)
+    app.run(
+        host='0.0.0.0',
+        port=1983,
+        debug=os.environ.get("FLASK_DEBUG", "0") == "1",
+    )

@@ -16,6 +16,7 @@
     <div class="card rounded-3 text-black p-4">
         <h3 class="mb-4">{{ 'Edit' if row else 'Add' }} Network</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
             <div class="mb-3">
                 <label for="ip_min" class="form-label">IP (min):</label>
                 <input type="text" class="form-control" id="ip_min" name="ip_min" value="{{ row['ip_min'] if row else '' }}" required placeholder="192.168.0.0">

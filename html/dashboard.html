@@ -244,7 +244,12 @@ updateDashboard();
 </table>
 
     <h3>Active Processes</h3>
-    <table class="table table-bordered">
+    <p class="text-muted mb-2">
+        Showing {{ processes|length }} of {{ process_total }} processes
+        on page {{ process_page }} of {{ process_total_pages }}.
+    </p>
+    <div class="table-responsive">
+    <table class="table table-bordered align-middle">
         <thead>
             <tr>
                 <th>PID</th>
@@ -261,9 +266,31 @@ updateDashboard();
                 <td>{{ process.cpu_usage }}</td>
                 <td>{{ process.ram_usage }}</td>
             </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-center text-muted">No processes found.</td>
+            </tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
+    {% if process_total_pages > 1 %}
+    <nav aria-label="Process pagination" class="mt-3">
+        <ul class="pagination justify-content-center mb-0">
+            <li class="page-item {% if process_page <= 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('dashboard', process_page=process_page - 1) }}">Previous</a>
+            </li>
+            {% for page_num in range(1, process_total_pages + 1) %}
+            <li class="page-item {% if page_num == process_page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('dashboard', process_page=page_num) }}">{{ page_num }}</a>
+            </li>
+            {% endfor %}
+            <li class="page-item {% if process_page >= process_total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('dashboard', process_page=process_page + 1) }}">Next</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
     </div>
 </div>
 {% endblock %}

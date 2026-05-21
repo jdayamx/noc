@@ -7,6 +7,7 @@ import re
 import sqlite3
 from datetime import datetime
 from functools import wraps
+from libs.security import admin_required
 
 network_bp = Blueprint('network', __name__)
 
@@ -22,7 +23,7 @@ def login_required(f):
     return decorated_function
 
 @network_bp.route('/network')
-@login_required
+@admin_required
 def network_list():
     per_page = 15
     page = request.args.get('page', 1, type=int)
@@ -48,7 +49,7 @@ def is_valid_ip(ip):
     return all(0 <= int(octet) <= 255 for octet in ip.split('.'))
 
 @network_bp.route('/network/add', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def network_add():
     if request.method == 'POST':
         new_ip_min = request.form['ip_min']
@@ -73,7 +74,7 @@ def network_add():
     return render_template('network/form.html', request=request)
 
 @network_bp.route('/network/edit/<id>', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def network_edit(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.row_factory = sqlite3.Row
@@ -111,7 +112,7 @@ def get_arp_table():
     return arp_table
 
 @network_bp.route('/network/<int:id>')
-@login_required
+@admin_required
 def network_view(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.row_factory = sqlite3.Row
@@ -155,8 +156,8 @@ def network_view(id):
         current_ip = ip_address(int(current_ip) + 1)
     return render_template('network/view.html', row=row, ip_list=ip_list)
 
-@network_bp.route('/network/delete/<id>', methods=['GET'])
-@login_required
+@network_bp.route('/network/delete/<id>', methods=['POST'])
+@admin_required
 def network_delete(id):
     with sqlite3.connect(DATABASE_NET) as conn:
         conn.execute('DELETE FROM network WHERE id = ?', (id,))

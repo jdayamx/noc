@@ -47,6 +47,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const contextMenu = document.getElementById('context-menu');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         let currentIP = null;
     
         document.querySelectorAll('.ip-cell').forEach(cell => {
@@ -81,7 +82,8 @@
                 fetch('{{ url_for('network.ping') }}', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({ ip: currentIP })
                 })

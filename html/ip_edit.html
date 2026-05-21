@@ -5,6 +5,7 @@
     <div class="card rounded-3 text-black p-4">
         <h3 class="mb-4">Edit IP</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
             <div class="mb-3">
                 <label for="ip" class="form-label">IP:</label>
                 <input type="text" class="form-control" id="ip" name="ip" value="{{ ip['ip'] if ip else '' }}" required>

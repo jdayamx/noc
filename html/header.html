@@ -8,13 +8,20 @@
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="nav me-auto navbar-nav">
+            {% if is_admin_user is defined and is_admin_user(session.get('username')) %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">System</a>
               <ul class="dropdown-menu">
                 <li><a class="dropdown-item" ole="button" href="#" id="updateButton">Update</a></li>
-                <li><a class="dropdown-item" href="/create_noc_service">Create noc.service</a></li>
+                <li>
+                  <form method="POST" action="/create_noc_service" class="px-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+                    <button type="submit" class="dropdown-item px-0">Create noc.service</button>
+                  </form>
+                </li>
               </ul>
             </li>
+            {% endif %}
             <!--
             <li class="nav-item">
               <a class="nav-link" href="#">Features</a>
@@ -38,10 +45,12 @@
                 <li><a class="dropdown-item" href="{{ url_for('logs') }}">Nginx logs</a></li>
               </ul>
             </li>
+            {% if is_admin_user is defined and is_admin_user(session.get('username')) %}
             <li class="nav-item"><a href="{{ url_for('user_list') }}" class="nav-link">Users</a></li>
+            {% endif %}
             <li class="nav-item"><a href="{{ url_for('logout') }}" class="nav-link">Logout ({{ session['username'] }})</a></li>
           </ul>
         </div>
-        div>
+        </div>
       </nav>
 </header>

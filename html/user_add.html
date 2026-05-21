@@ -4,6 +4,7 @@
 <div class="container py-3 h-100">
     <div class="card rounded-3 text-black p-4">
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
             <h3>Add User</h3>
             
             <label for="username">Username:</label>

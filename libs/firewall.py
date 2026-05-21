@@ -2,31 +2,40 @@ import platform
 import subprocess
 
 def check_ufw():
+    if platform.system() == "Windows":
+        return None
+
     try:
         output = subprocess.check_output(['which', 'ufw'], stderr=subprocess.STDOUT)
         if output:
             return "ufw is installed"
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     return None
 
 def check_firewalld():
+    if platform.system() == "Windows":
+        return None
+
     try:
         output = subprocess.check_output(['systemctl', 'is-active', '--quiet', 'firewalld'])
         if output.decode('utf-8').strip() == "active":
             version_output = subprocess.check_output(['firewall-cmd', '--version'], stderr=subprocess.STDOUT)
             version = version_output.decode('utf-8').strip()
             return f"firewalld is installed, version: {version}"
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     return None
 
 def check_iptables():
+    if platform.system() == "Windows":
+        return None
+
     try:
         output = subprocess.check_output(['iptables', '--version'], stderr=subprocess.STDOUT)
         version = output.decode('utf-8').strip()
         return f"iptables is installed, version: {version}"
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     return None
 
@@ -36,7 +45,7 @@ def check_windows_firewall():
             output = subprocess.check_output(['powershell', 'Get-NetFirewallProfile'], stderr=subprocess.STDOUT, timeout=1)
             if "Enabled" in output.decode('utf-8'):
                 return "Windows Firewall is installed and active"
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             pass
         except subprocess.TimeoutExpired:
             pass

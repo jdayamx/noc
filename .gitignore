@@ -1,5 +1,7 @@
 db/*.db
 db/*.sqlite3
+db/secret_key.txt
+db/bootstrap_credentials.txt
 __pycache__/
 __pycache__/*.pyc
 *.pyc
