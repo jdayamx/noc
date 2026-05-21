@@ -41,6 +41,9 @@
                 <li><a class="dropdown-item" href="{{ url_for('ip_list') }}">IPs</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('network.network_list') }}">Network</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('dhcp') }}">DHCP</a></li>
+                {% if firewall_type is defined and firewall_type == 'iptables' %}
+                <li><a class="dropdown-item" href="{{ url_for('firewall_page') }}">Firewall</a></li>
+                {% endif %}
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="{{ url_for('lan') }}">Info</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('logs') }}">Nginx logs</a></li>

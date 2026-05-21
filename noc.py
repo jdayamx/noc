@@ -31,7 +31,7 @@ from libs.security import admin_required, csrf_token, get_admin_usernames, is_ad
 from collections import Counter
 
 previous_traffic = {}
-APP_VERSION = "1.0.0.17"
+APP_VERSION = "1.0.0.18"
 
 app = Flask(__name__, template_folder='html')
 app.register_blueprint(network_bp)
@@ -80,6 +80,7 @@ def inject_security_helpers():
         "csrf_token": csrf_token,
         "is_admin_user": is_admin_user,
         "app_version": APP_VERSION,
+        "firewall_type": firewall.get_firewall_type(),
     }
 
 
@@ -1153,6 +1154,26 @@ def dhcp_kick():
     subprocess.run(['systemctl', 'restart', 'dhcpd.service'], check=True)
     flash(f'DHCP lease {ip_address} was kicked.', 'success')
     return redirect(url_for('dhcp'))
+
+
+@app.route('/firewall')
+@login_required
+def firewall_page():
+    if firewall.get_firewall_type() != 'iptables':
+        flash('iptables firewall is not detected on this host.', 'warning')
+        return redirect(url_for('lan'))
+
+    firewall_tables = firewall.get_iptables_tables()
+    total_rules = sum(len(chain['rules']) for table in firewall_tables for chain in table['chains'])
+    total_chains = sum(len(table['chains']) for table in firewall_tables)
+
+    return render_template(
+        'firewall.html',
+        firewall_tables=firewall_tables,
+        total_rules=total_rules,
+        total_chains=total_chains,
+        firewall_type=firewall.get_firewall_type(),
+    )
 
 
 @app.route("/logs")
