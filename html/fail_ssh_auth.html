@@ -20,9 +20,10 @@
                 <label for="login" class="form-label">Login search</label>
                 <input type="text" class="form-control" id="login" name="login" value="{{ login_filter }}" placeholder="root">
             </div>
-            <div class="col-md-4 d-flex gap-2">
+            <div class="col-md-4 d-flex gap-2 flex-wrap">
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{{ url_for('fail_ssh_auth') }}" class="btn btn-outline-secondary">Reset</a>
+                <a href="{{ url_for('fail_ssh_auth_export', ip=ip_filter, login=login_filter) }}" class="btn btn-success">Export CSV</a>
             </div>
         </form>
 
