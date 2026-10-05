@@ -70,6 +70,22 @@
         const contextMenu = document.getElementById('context-menu');
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         let currentIP = null;
+        async function refreshStatus() {
+            if (!document.hidden) {
+                try {
+                    const response = await fetch('{{ url_for("network.network_status", id=row["id"]) }}');
+                    if (response.ok && !response.redirected) {
+                        const data = await response.json();
+                        data.entries.forEach(entry => {
+                            const cell = document.querySelector(`.ip-cell[data-ip="${entry.ip}"]`);
+                            if (cell) cell.style.backgroundColor = entry.color;
+                        });
+                    }
+                } catch (error) { /* Retry next cycle without interrupting editing. */ }
+            }
+            setTimeout(refreshStatus, 30000);
+        }
+        setTimeout(refreshStatus, 30000);
         let descriptionIP = null;
         const descriptionElement = document.getElementById('descriptionModal');
         const descriptionModal = new bootstrap.Modal(descriptionElement);

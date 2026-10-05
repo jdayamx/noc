@@ -185,15 +185,11 @@ def network_view(id):
         db_rows_p = cursor.fetchall()
         db_ports = {row['ip']: row['ports'] for row in db_rows_p}
 
-    arp_table = get_arp_table()
-    arp_ips = {row['ip'] for row in arp_table}
     ip_list = []
     current_ip = ip_min
     while current_ip <= ip_max:
         ip_last_digit = int(str(current_ip).split('.')[-1])
         status = db_status.get(str(current_ip))
-        if status not in ('online', 'offline') and str(current_ip) in arp_ips:
-            status = 'online'
         color = ip_color(str(current_ip), status, db_seen.get(str(current_ip), False))
         ip_entry = {
             'ip': str(current_ip),
@@ -208,6 +204,20 @@ def network_view(id):
         current_ip = ip_address(int(current_ip) + 1)
     return render_template('network/view.html', row=row, ip_list=ip_list)
 
+
+@network_bp.route('/network/status/<int:id>')
+@admin_required
+def network_status(id):
+    with closing(sqlite3.connect(DATABASE_NET)) as conn:
+        bounds = conn.execute('SELECT ip_min, ip_max FROM network WHERE id=?', (id,)).fetchone()
+        if bounds is None:
+            abort(404)
+        low, high = map(ip_address, bounds)
+        entries = [{'ip': ip, 'color': ip_color(ip, status, seen)}
+                   for ip, status, seen in conn.execute('SELECT ip, status, ever_seen FROM ip')
+                   if low <= ip_address(ip) <= high]
+    return jsonify({'entries': entries})
+
 @network_bp.route('/network/delete/<id>', methods=['POST'])
 @admin_required
 def network_delete(id):
@@ -221,27 +231,27 @@ def network_delete(id):
 @network_bp.route('/network/ping', methods=['POST'])
 @login_required
 def ping():
-    data = request.get_json()
-    ip = data.get('ip')
-    if not ip:
+    data = request.get_json(silent=True)
+    ip = data.get('ip') if isinstance(data, dict) else None
+    if not isinstance(ip, str) or not is_valid_ip(ip):
         return jsonify({'error': 'No IP provided'}), 400
 
     try:
-        # ping -c 1 -w 1 для Linux/macOS, для Windows буде інший
-        result = subprocess.run(['ping', '-c', '1', '-w', '1', ip],
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
-        online = result.returncode == 0
+        from libs.monitor import probe, ensure_monitor_columns
+        import time
+        online = probe(ip)
         status = 'online' if online else 'offline'
         now = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
 
         with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
-            ensure_presence_column(conn)
+            ensure_monitor_columns(conn)
             conn.execute('INSERT OR IGNORE INTO ip (ip) VALUES (?)', (ip,))
             conn.execute("""UPDATE ip SET status = ?, updated_at = ?,
                          ever_seen = CASE WHEN ? THEN 1 ELSE ever_seen END WHERE ip = ?""",
                          (status, now, online, ip))
+            conn.execute('UPDATE ip SET checked_at=?, ping_failures=? WHERE ip=?',
+                         (time.time(), 0 if online else 3, ip))
             ever_seen = bool(conn.execute('SELECT ever_seen FROM ip WHERE ip = ?', (ip,)).fetchone()[0])
         return jsonify({'status': status, 'ever_seen': ever_seen,
                         'color': ip_color(ip, status, ever_seen)})

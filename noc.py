@@ -1667,48 +1667,20 @@ def reset_users():
         add_default_users()
     return redirect(url_for('dashboard'))
 
-def update_arp_table():
-    arp_entries = get_arp_table()
-    with sqlite3.connect(DATABASE_NET) as conn:
-        cursor = conn.cursor()
-        # Спочатку всім ставимо offline
-        cursor.execute("UPDATE ip SET status = 'offline'")
-        # Потім оновлюємо або вставляємо активні (online)
-        for entry in arp_entries:
-            # Оновити, якщо існує
-            cursor.execute('''
-                UPDATE ip
-                SET mac = ?, status = 'online', updated_at = datetime('now')
-                WHERE ip = ?
-            ''', (entry["mac"], entry["ip"]))
-
-            # Вставити, якщо ще нема такого IP
-            cursor.execute('''
-                INSERT INTO ip (ip, mac, status, updated_at)
-                SELECT ?, ?, 'online', datetime('now')
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM ip WHERE ip = ?
-                )
-            ''', (entry["ip"], entry["mac"], entry["ip"]))
-
-        conn.commit()
-
 def start_scheduler():
+    from libs.monitor import monitor_tick
     scheduler = BackgroundScheduler()
-    scheduler.add_job(update_arp_table, 'interval', minutes=15)
+    scheduler.add_job(monitor_tick, 'interval', seconds=30,
+                      args=[DATABASE_NET, get_arp_table], max_instances=1,
+                      coalesce=True, next_run_time=datetime.now())
     scheduler.start()
-    # Додаємо шедулер до окремого потоку
-    def scheduler_thread():
-        while True:
-            time.sleep(1)  # Не даємо потоку зупинитись
-    thread = threading.Thread(target=scheduler_thread)
-    thread.start()
+    return scheduler
 
 if __name__ == '__main__':
     init_db()
     add_default_users()
-    #if not os.environ.get("WERKZEUG_RUN_MAIN"):
-    start_scheduler()
+    if os.environ.get("FLASK_DEBUG", "0") != "1" or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        start_scheduler()
     app.run(
         host='0.0.0.0',
         port=1983,
