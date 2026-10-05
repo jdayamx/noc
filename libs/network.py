@@ -22,6 +22,24 @@ def ensure_description_column(conn):
         conn.execute("ALTER TABLE ip ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 
 
+def ensure_presence_column(conn):
+    columns = {row[1] for row in conn.execute('PRAGMA table_info(ip)')}
+    if 'ever_seen' not in columns:
+        conn.execute('ALTER TABLE ip ADD COLUMN ever_seen INTEGER NOT NULL DEFAULT 0')
+    if {'mac', 'status'} <= columns:
+        conn.execute("""UPDATE ip SET ever_seen = 1 WHERE ever_seen = 0 AND
+                     (status = 'online' OR (mac IS NOT NULL AND mac NOT IN ('', 'N/A'))
+                      OR EXISTS (SELECT 1 FROM service WHERE service.ip_id = ip.id))""")
+
+
+def ip_color(ip, status, ever_seen):
+    if status == 'online':
+        return 'green'
+    if ever_seen:
+        return 'red'
+    return 'yellow' if int(ip.split('.')[-1]) in (0, 255) else 'lightgray'
+
+
 @network_bp.route('/network/description/<ip>', methods=['POST'])
 @admin_required
 def save_description(ip):
@@ -144,6 +162,7 @@ def network_view(id):
     with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
         conn.execute('BEGIN IMMEDIATE')
         ensure_description_column(conn)
+        ensure_presence_column(conn)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM network WHERE id = ?", (id,))
@@ -154,10 +173,10 @@ def network_view(id):
         ip_max = ip_address(row['ip_max'])
 
         # IP text ordering is not numeric ordering (e.g. .100 sorts before .20).
-        cursor.execute("SELECT ip, mac, status, description FROM ip")
+        cursor.execute("SELECT ip, mac, status, description, ever_seen FROM ip")
         db_rows = [entry for entry in cursor.fetchall()
                    if ip_min <= ip_address(entry['ip']) <= ip_max]
-        db_ips = {row['ip'] for row in db_rows}
+        db_seen = {row['ip']: row['ever_seen'] for row in db_rows}
         db_dict = {row['ip']: row['mac'] for row in db_rows}
         db_status = {row['ip']: row['status'] for row in db_rows}
         db_descriptions = {row['ip']: row['description'] for row in db_rows}
@@ -172,14 +191,10 @@ def network_view(id):
     current_ip = ip_min
     while current_ip <= ip_max:
         ip_last_digit = int(str(current_ip).split('.')[-1])
-        color = 'lightgray'
-        if ip_last_digit in [0, 255]:
-            color = 'yellow'
-        if str(current_ip) in db_ips:
-            color = 'red'
         status = db_status.get(str(current_ip))
-        if status == 'online' or (status not in ('online', 'offline') and str(current_ip) in arp_ips):
-            color = 'green'
+        if status not in ('online', 'offline') and str(current_ip) in arp_ips:
+            status = 'online'
+        color = ip_color(str(current_ip), status, db_seen.get(str(current_ip), False))
         ip_entry = {
             'ip': str(current_ip),
             'number': ip_last_digit,
@@ -220,33 +235,16 @@ def ping():
         status = 'online' if online else 'offline'
         now = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
 
-        conn = sqlite3.connect(DATABASE_NET)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT id FROM ip WHERE ip = ?", (ip,))
-        row = cursor.fetchone()
-
-        if row is None:
-            # Додаємо новий запис
-            cursor.execute("""
-                INSERT INTO ip (ip, status, updated_at)
-                VALUES (?, ?, ?)
-            """, (ip, status, now))
-        else:
-            # Оновлюємо існуючий
-            cursor.execute("""
-                UPDATE ip
-                SET status = ?, updated_at = ?
-                WHERE ip = ?
-            """, (status, now, ip))
-
-        conn.commit()
-        conn.close()
-
-        # mac = get_mac_from_ip(ip)
-        # if mac:
-        #     subprocess.run(['ip', 'neigh', 'replace', ip, 'lladdr', mac])
-        return jsonify({'status': status})
+        with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            ensure_presence_column(conn)
+            conn.execute('INSERT OR IGNORE INTO ip (ip) VALUES (?)', (ip,))
+            conn.execute("""UPDATE ip SET status = ?, updated_at = ?,
+                         ever_seen = CASE WHEN ? THEN 1 ELSE ever_seen END WHERE ip = ?""",
+                         (status, now, online, ip))
+            ever_seen = bool(conn.execute('SELECT ever_seen FROM ip WHERE ip = ?', (ip,)).fetchone()[0])
+        return jsonify({'status': status, 'ever_seen': ever_seen,
+                        'color': ip_color(ip, status, ever_seen)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
@@ -281,7 +279,11 @@ def ports(ip):
                              and port.find('state').get('state') == 'open'})
         now = datetime.utcnow().isoformat()
         with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            ensure_presence_column(conn)
             conn.execute('INSERT OR IGNORE INTO ip (ip) VALUES (?)', (ip,))
+            if open_ports:
+                conn.execute('UPDATE ip SET ever_seen = 1 WHERE ip = ?', (ip,))
             ip_id = conn.execute('SELECT id FROM ip WHERE ip = ?', (ip,)).fetchone()[0]
             conn.execute('DELETE FROM service WHERE ip_id = ?', (ip_id,))
             conn.executemany(

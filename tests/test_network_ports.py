@@ -88,6 +88,27 @@ class PortScanTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM ip').fetchone()[0], 0)
 
+    def test_ping_distinguishes_unseen_from_previously_seen(self):
+        with closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.executescript("ALTER TABLE ip ADD COLUMN mac TEXT; ALTER TABLE ip ADD COLUMN status TEXT; ALTER TABLE ip ADD COLUMN updated_at TEXT; CREATE TABLE network(id INTEGER, ip_min TEXT, ip_max TEXT); INSERT INTO network VALUES(1,'10.1.1.99','10.1.1.99');")
+        def ping(code):
+            with patch.object(network.subprocess, 'run') as run:
+                run.return_value.returncode = code
+                response = self.client.post('/network/ping', json={'ip': '10.1.1.99'})
+                self.assertEqual(response.status_code, 200)
+                return response.json
+        self.client.post('/network/description/10.1.1.99', json={'description': 'Reserved'})
+        self.assertEqual(ping(1)['color'], 'lightgray')
+        self.assertEqual(ping(0)['color'], 'green')
+        result = ping(1)
+        self.assertTrue(result['ever_seen'])
+        self.assertEqual(result['color'], 'red')
+        with patch.object(network, 'get_arp_table', return_value=[]), patch.object(network, 'render_template', side_effect=lambda template, **ctx: {'entries': ctx['ip_list']}):
+            self.assertEqual(self.client.get('/network/1').json['entries'][0]['color'], 'red')
+        with closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute("UPDATE ip SET ever_seen=0, mac='aa:bb:cc:dd:ee:ff', status='offline'")
+        self.assertEqual(ping(1)['color'], 'red')
+
     def test_invalid_target_and_get_do_not_scan(self):
         with patch.object(network.subprocess, 'run') as run:
             self.assertEqual(self.client.post('/network/ports/--help').status_code, 400)
