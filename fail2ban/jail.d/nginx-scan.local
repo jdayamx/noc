@@ -1,0 +1,12 @@
+[nginx-scan]
+enabled = true
+filter = nginx-scan
+port = http,https
+logpath = /var/log/nginx/access.log
+maxretry = 1
+findtime = 10m
+bantime = -1
+
+# If your host uses nftables instead of iptables, swap this to the matching
+# all-ports banaction that exists on your system.
+action = iptables-allports

@@ -1,0 +1,18 @@
+[Unit]
+Description=Fail2Ban UI
+After=network-online.target fail2ban.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/fail2ban-ui
+Environment=BIND_ADDRESS=10.1.1.1
+Environment=PORT=1984
+ExecStart=/opt/fail2ban-ui/fail2ban-ui
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

@@ -31,6 +31,28 @@ If you are using a firewall, allow the necessary ports:
    sudo firewall-cmd --reload
    ```
 
+## Fail2Ban Rule For Nginx Scanners
+
+This repository includes a fail2ban filter and jail for noisy Nginx scan traffic:
+
+- `fail2ban/filter.d/nginx-scan.conf`
+- `fail2ban/jail.d/nginx-scan.local`
+
+The jail is configured with:
+
+- `maxretry = 1`
+- `bantime = -1` for a permanent ban
+- `action = iptables-allports`
+
+Install it on the host by copying those files into `/etc/fail2ban/filter.d/` and `/etc/fail2ban/jail.d/`, then restart fail2ban:
+
+```bash
+sudo cp fail2ban/filter.d/nginx-scan.conf /etc/fail2ban/filter.d/
+sudo cp fail2ban/jail.d/nginx-scan.local /etc/fail2ban/jail.d/
+sudo systemctl restart fail2ban
+sudo fail2ban-client status nginx-scan
+```
+
 ## Usage
 
 1. Run the app:

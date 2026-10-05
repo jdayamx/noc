@@ -1,10 +1,12 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session, abort
 from math import ceil
 from ipaddress import ip_address
 import subprocess
 import os
 import re
 import sqlite3
+import xml.etree.ElementTree as ET
+from contextlib import closing
 from datetime import datetime
 from functools import wraps
 from libs.security import admin_required
@@ -13,6 +15,31 @@ network_bp = Blueprint('network', __name__)
 
 DB_FOLDER = 'db'
 DATABASE_NET = os.path.join(DB_FOLDER, 'network.db')
+
+def ensure_description_column(conn):
+    columns = {row[1] for row in conn.execute('PRAGMA table_info(ip)')}
+    if 'description' not in columns:
+        conn.execute("ALTER TABLE ip ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+
+
+@network_bp.route('/network/description/<ip>', methods=['POST'])
+@admin_required
+def save_description(ip):
+    data = request.get_json(silent=True)
+    if not is_valid_ip(ip) or not isinstance(data, dict):
+        return jsonify({'error': 'Invalid request'}), 400
+    description = data.get('description')
+    if not isinstance(description, str) or len(description) > 4000:
+        return jsonify({'error': 'Description must be text up to 4000 characters.'}), 400
+    try:
+        with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            ensure_description_column(conn)
+            conn.execute('INSERT OR IGNORE INTO ip (ip) VALUES (?)', (ip,))
+            conn.execute('UPDATE ip SET description = ? WHERE ip = ?', (description, ip))
+        return jsonify({'ip': ip, 'description': description})
+    except sqlite3.Error:
+        return jsonify({'error': 'Could not save description.'}), 500
 
 def login_required(f):
     @wraps(f)
@@ -114,18 +141,26 @@ def get_arp_table():
 @network_bp.route('/network/<int:id>')
 @admin_required
 def network_view(id):
-    with sqlite3.connect(DATABASE_NET) as conn:
+    with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
+        conn.execute('BEGIN IMMEDIATE')
+        ensure_description_column(conn)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM network WHERE id = ?", (id,))
         row = cursor.fetchone()
+        if row is None:
+            abort(404)
         ip_min = ip_address(row['ip_min'])
         ip_max = ip_address(row['ip_max'])
 
-        cursor.execute("SELECT ip, mac FROM ip WHERE ip >= ? AND ip <= ?", (row['ip_min'], row['ip_max']))
-        db_rows = cursor.fetchall()
+        # IP text ordering is not numeric ordering (e.g. .100 sorts before .20).
+        cursor.execute("SELECT ip, mac, status, description FROM ip")
+        db_rows = [entry for entry in cursor.fetchall()
+                   if ip_min <= ip_address(entry['ip']) <= ip_max]
         db_ips = {row['ip'] for row in db_rows}
         db_dict = {row['ip']: row['mac'] for row in db_rows}
+        db_status = {row['ip']: row['status'] for row in db_rows}
+        db_descriptions = {row['ip']: row['description'] for row in db_rows}
 
         cursor.execute("SELECT ip.ip, GROUP_CONCAT(service.number, ',') AS ports FROM ip LEFT JOIN service ON service.ip_id = ip.id GROUP BY ip.ip;")
         db_rows_p = cursor.fetchall()
@@ -142,13 +177,15 @@ def network_view(id):
             color = 'yellow'
         if str(current_ip) in db_ips:
             color = 'red'
-        if str(current_ip) in arp_ips:
+        status = db_status.get(str(current_ip))
+        if status == 'online' or (status not in ('online', 'offline') and str(current_ip) in arp_ips):
             color = 'green'
         ip_entry = {
             'ip': str(current_ip),
             'number': ip_last_digit,
             'color': color,
             'mac': db_dict.get(str(current_ip), ''),
+            'description': db_descriptions.get(str(current_ip), '') or '',
             'ports': db_ports.get(str(current_ip), '')
         }
         ip_list.append(ip_entry)
@@ -218,46 +255,44 @@ def ping():
 #     match = re.search(r'(?P<mac>([0-9a-f]{2}:){5}[0-9a-f]{2})', output, re.I)
 #     return match.group('mac') if match else None
 
-@network_bp.route('/network/ports/<ip>')
-@login_required
+@network_bp.route('/network/ports/<ip>', methods=['POST'])
+@admin_required
 def ports(ip):
+    if not is_valid_ip(ip):
+        return jsonify({'error': 'Invalid IPv4 address'}), 400
     try:
-        # Запускаємо nmap на основні TCP-порти
-        # nmap -p- --min-rate 9999 -T4 --host-timeout 60s 10.1.1.162
-        result = subprocess.run(['nmap', '-p-', '--min-rate', '9999', '-T4', '--host-timeout', '60s', ip], capture_output=True, text=True, timeout=60)
-        output = result.stdout
-
-        # Парсимо відкриті порти
-        open_ports = []
-        for line in output.splitlines():
-            if '/tcp' in line and 'open' in line:
-                port = int(line.split('/')[0])
-                open_ports.append(port)
-
-        # Отримуємо id IP-адреси з бази
-        conn = sqlite3.connect(DATABASE_NET)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM ip WHERE ip = ?", (ip,))
-        ip_row = cursor.fetchone()
-        if not ip_row:
-            return jsonify({'error': 'IP not found'}), 404
-        ip_id = ip_row[0]
-
+        result = subprocess.run(
+            ['nmap', '-sT', '-Pn', '-n', '-p-', '-T4',
+             '--host-timeout', '60s', '-oX', '-', ip],
+            capture_output=True, text=True, timeout=75)
+        if result.returncode != 0:
+            return jsonify({'error': 'Nmap failed; previous ports were preserved.'}), 502
+        report = ET.fromstring(result.stdout)
+        finished = report.find('runstats/finished')
+        host = next((host for host in report.findall('host')
+                     if any(address.get('addr') == ip for address in host.findall('address'))), None)
+        if (finished is None or finished.get('exit') != 'success' or host is None
+                or host.get('timedout') == 'true' or host.find('ports') is None):
+            return jsonify({'error': 'Scan incomplete or host timed out; previous ports were preserved.'}), 502
+        open_ports = sorted({int(port.get('portid'))
+                             for port in host.findall('ports/port')
+                             if port.get('protocol') == 'tcp'
+                             and port.find('state') is not None
+                             and port.find('state').get('state') == 'open'})
         now = datetime.utcnow().isoformat()
-
-        # Видаляємо старі записи
-        cursor.execute("DELETE FROM service WHERE ip_id = ?", (ip_id,))
-
-        # Додаємо нові
-        for port in open_ports:
-            cursor.execute("""
-                INSERT INTO service (ip_id, number, updated_at)
-                VALUES (?, ?, ?)
-            """, (ip_id, port, now))
-
-        conn.commit()
-        conn.close()
-
+        with closing(sqlite3.connect(DATABASE_NET)) as conn, conn:
+            conn.execute('INSERT OR IGNORE INTO ip (ip) VALUES (?)', (ip,))
+            ip_id = conn.execute('SELECT id FROM ip WHERE ip = ?', (ip,)).fetchone()[0]
+            conn.execute('DELETE FROM service WHERE ip_id = ?', (ip_id,))
+            conn.executemany(
+                'INSERT INTO service (ip_id, number, updated_at) VALUES (?, ?, ?)',
+                [(ip_id, port, now) for port in open_ports])
         return jsonify({'ip': ip, 'ports': open_ports})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except FileNotFoundError:
+        return jsonify({'error': 'Nmap is not installed on the NOC server.'}), 503
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Scan timed out; previous ports were preserved.'}), 504
+    except (ET.ParseError, ValueError, TypeError):
+        return jsonify({'error': 'Invalid Nmap output; previous ports were preserved.'}), 502
+    except sqlite3.Error:
+        return jsonify({'error': 'Could not save scan results.'}), 500

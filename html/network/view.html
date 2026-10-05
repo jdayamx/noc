@@ -19,9 +19,9 @@
                 <tr>
                     {% for ip_entry in ip_list[i:i+16] %}
                         <td class="ip-cell" style="background-color: {{ ip_entry.color }};text-align:center;" 
-                        {% if ip_entry.mac %}
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="{{ ip_entry.ip }}<br>{{ ip_entry.mac }}{% if ip_entry.ports %}<br>Ports: {{ ip_entry.ports }}{% endif %}"
-                        {% endif %}
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="false" title="{{ ip_entry.ip }}{% if ip_entry.mac %}&#10;{{ ip_entry.mac }}{% endif %}{% if ip_entry.description %}&#10;{{ ip_entry.description }}{% endif %}{% if ip_entry.ports %}&#10;Ports: {{ ip_entry.ports }}{% endif %}"
+                            data-description="{{ ip_entry.description }}" data-ports="{{ ip_entry.ports or '' }}"
+                            data-mac="{{ ip_entry.mac or '' }}"
                          data-ip="{{ ip_entry.ip }}"
                         >
                             {{ ip_entry.number }} 
@@ -36,6 +36,26 @@
 <div id="context-menu" class="dropdown-menu show" style="display:none; position:absolute;">
     <button class="dropdown-item" id="ping-action">Ping</button>
     <button class="dropdown-item" id="scan-action">Scan ports</button>
+    <button class="dropdown-item" id="description-action">Description</button>
+</div>
+
+<style>.tooltip-inner { white-space: pre-wrap; overflow-wrap: anywhere; }</style>
+<div class="modal fade" id="descriptionModal" tabindex="-1" aria-labelledby="descriptionTitle" aria-hidden="true">
+    <div class="modal-dialog modal-sm"><form class="modal-content" id="descriptionForm">
+        <div class="modal-header">
+            <h5 class="modal-title" id="descriptionTitle">Description</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <label for="descriptionText" class="form-label">Опис IP-адреси</label>
+            <textarea id="descriptionText" class="form-control" rows="4" maxlength="4000"></textarea>
+            <div id="descriptionError" class="text-danger mt-2" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+            <button type="submit" class="btn btn-primary" id="descriptionSave">Зберегти</button>
+        </div>
+    </form></div>
 </div>
 
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
@@ -49,6 +69,45 @@
         const contextMenu = document.getElementById('context-menu');
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         let currentIP = null;
+        let descriptionIP = null;
+        const descriptionElement = document.getElementById('descriptionModal');
+        const descriptionModal = new bootstrap.Modal(descriptionElement);
+        const descriptionText = document.getElementById('descriptionText');
+        const descriptionError = document.getElementById('descriptionError');
+        const descriptionSave = document.getElementById('descriptionSave');
+        descriptionElement.addEventListener('shown.bs.modal', () => descriptionText.focus());
+        document.getElementById('description-action').addEventListener('click', () => {
+            if (!currentIP) return;
+            descriptionIP = currentIP;
+            contextMenu.style.display = 'none';
+            descriptionText.value = document.querySelector(`.ip-cell[data-ip="${descriptionIP}"]`).dataset.description;
+            document.getElementById('descriptionTitle').textContent = `Description · ${descriptionIP}`;
+            descriptionError.textContent = '';
+            descriptionModal.show();
+        });
+        document.getElementById('descriptionForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const ip = descriptionIP;
+            descriptionSave.disabled = true;
+            descriptionError.textContent = '';
+            try {
+                const response = await fetch(`/network/description/${ip}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ description: descriptionText.value })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || data.message || 'Не вдалося зберегти опис');
+                const cell = document.querySelector(`.ip-cell[data-ip="${ip}"]`);
+                cell.dataset.description = data.description;
+                refreshIPTooltip(cell);
+                if (descriptionIP === ip) descriptionModal.hide();
+            } catch (error) {
+                descriptionError.textContent = error.message;
+            } finally {
+                descriptionSave.disabled = false;
+            }
+        });
     
         document.querySelectorAll('.ip-cell').forEach(cell => {
             cell.addEventListener('contextmenu', function(e) {
@@ -79,20 +138,25 @@
             e.preventDefault();
             contextMenu.style.display = 'none';
             if (currentIP) {
+                const pingIP = currentIP;
                 fetch('{{ url_for('network.ping') }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({ ip: currentIP })
+                    body: JSON.stringify({ ip: pingIP })
                 })
                 .then(response => response.json())
                 .then(data => {
+                    if (data.status === 'online' || data.status === 'offline') {
+                        const cell = document.querySelector(`.ip-cell[data-ip="${pingIP}"]`);
+                        if (cell) cell.style.backgroundColor = data.status === 'online' ? 'green' : 'red';
+                    }
                     if (data.status === 'online') {
-                        showToast(`💚 ${currentIP} online`);
+                        showToast(`💚 ${pingIP} online`);
                     } else if (data.status === 'offline') {
-                        showToast(`💔 ${currentIP} offline`);
+                        showToast(`💔 ${pingIP} offline`);
                     } else {
                         showToast(`⚠️ Ping error: ${data.error}`);
                     }
@@ -105,18 +169,42 @@
     });
 
     function scanNmap(ip) {
-        fetch(`/network/ports/${ip}`)
-            .then(res => res.json())
+        showToast(`${ip} → Scanning TCP ports…`);
+        fetch(`/network/ports/${ip}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content }
+        })
+            .then(async res => {
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                return data;
+            })
             .then(data => {
                 if (data.ports) {
-                    showToast(`${ip} → Open ports: ${data.ports.join(', ')}`);
+                    const ports = data.ports.join(', ') || 'none';
+                    showToast(`${ip} → Open TCP ports: ${ports}`);
+                    const cell = document.querySelector(`.ip-cell[data-ip="${ip}"]`);
+                    if (cell) {
+                        cell.dataset.ports = ports;
+                        refreshIPTooltip(cell);
+                    }
                 } else if (data.error) {
                     showToast(`${ip} → Error: ${data.error}`);
                 }
             })
             .catch(err => {
-                showToast(`${ip} → Request failed`);
+                showToast(`${ip} → ${err.message}`);
             });
+    }
+
+    function refreshIPTooltip(cell) {
+        const tooltip = bootstrap.Tooltip.getInstance(cell);
+        if (tooltip) tooltip.dispose();
+        cell.removeAttribute('data-bs-original-title');
+        const lines = [cell.dataset.ip, cell.dataset.mac, cell.dataset.description];
+        if (cell.dataset.ports) lines.push(`Ports: ${cell.dataset.ports}`);
+        cell.setAttribute('title', lines.filter(Boolean).join('\n'));
+        new bootstrap.Tooltip(cell, { html: false });
     }
 
     function showToast(message) {
